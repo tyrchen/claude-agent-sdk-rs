@@ -1,18 +1,24 @@
 [package]
 name = "claude-agent-sdk"
 version = "0.1.0"
-authors = ["Your Name <YourName@yourdomain.com>"]
+authors = ["Tao Chen <tao.chen@example.com>"]
 edition = "2021"
+rust-version = "1.70"
 license = "MIT"
 documentation = "https://docs.rs/claude-agent-sdk"
-repository = "https://github.com/TODO/claude-agent-sdk-rs"
-homepage = "https://github.com/TODO/claude-agent-sdk-rs"
-description = """
-Rust SDK for interacting with Claude Code CLI, enabling programmatic access to Claude's capabilities
-"""
+repository = "https://github.com/taocraft/claude-agent-sdk-rs"
+homepage = "https://github.com/taocraft/claude-agent-sdk-rs"
+description = "Rust SDK for Claude Code CLI with bidirectional streaming, hooks, and custom tools support"
 readme = "README.md"
-categories = ["development-tools", "api-bindings"]
-keywords = ["claude", "ai", "agent", "sdk", "anthropic"]
+categories = ["development-tools", "api-bindings", "asynchronous"]
+keywords = ["claude", "ai", "agent", "anthropic", "llm"]
+exclude = [
+    ".github/",
+    "vendors/",
+    "fixtures/",
+    ".gitignore",
+    ".gitmodules",
+]
 
 [dependencies]
 # Async runtime

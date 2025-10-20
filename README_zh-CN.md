@@ -6,26 +6,26 @@
 
 [English](README.md) | [中文](README_zh-CN.md)
 
-Rust SDK for interacting with Claude Code CLI, enabling programmatic access to Claude's capabilities with **full bidirectional streaming support**.
+Rust SDK 用于与 Claude Code CLI 交互，提供对 Claude 功能的编程访问，**完全支持双向流式传输**。
 
-**Status**: ✅ **Production Ready** - 100% feature parity with Python SDK
+**状态**: ✅ **生产就绪** - 与 Python SDK 100% 功能对等
 
-## ✨ Features
+## ✨ 特性
 
-- 🚀 **Simple Query API**: One-shot queries for stateless interactions
-- 🔄 **Bidirectional Streaming**: Real-time streaming communication with `ClaudeClient`
-- 🎛️ **Dynamic Control**: Interrupt, change permissions, switch models mid-execution
-- 🪝 **Hooks System**: Intercept and control Claude's behavior at runtime
-- 🛠️ **Custom Tools**: In-process MCP servers with ergonomic tool macro
-- 🔐 **Permission Management**: Fine-grained control over tool execution
-- 🦀 **Type Safety**: Strongly-typed messages, configs, hooks, and permissions
-- ⚡ **Zero Deadlock**: Lock-free architecture for concurrent read/write
-- 📚 **Comprehensive Examples**: 15+ examples covering all features
-- 🧪 **Well Tested**: Extensive test coverage with unit and integration tests
+- 🚀 **简单查询 API**: 用于无状态交互的一次性查询
+- 🔄 **双向流式传输**: 使用 `ClaudeClient` 进行实时流式通信
+- 🎛️ **动态控制**: 中断、更改权限、执行中切换模型
+- 🪝 **钩子系统**: 运行时拦截和控制 Claude 的行为
+- 🛠️ **自定义工具**: 进程内 MCP 服务器，提供简洁的工具宏
+- 🔐 **权限管理**: 对工具执行的细粒度控制
+- 🦀 **类型安全**: 强类型的消息、配置、钩子和权限
+- ⚡ **零死锁**: 无锁架构，支持并发读写
+- 📚 **全面示例**: 15+ 个示例涵盖所有功能
+- 🧪 **充分测试**: 广泛的单元测试和集成测试覆盖
 
-## 📦 Installation
+## 📦 安装
 
-Add this to your `Cargo.toml`:
+在你的 `Cargo.toml` 中添加:
 
 ```toml
 [dependencies]
@@ -33,30 +33,30 @@ claude-agent-sdk = "0.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
-Or use cargo-add:
+或使用 cargo-add:
 
 ```bash
 cargo add claude-agent-sdk
 cargo add tokio --features full
 ```
 
-## 🎯 Prerequisites
+## 🎯 前置要求
 
-- **Rust**: 1.70 or higher
-- **Claude Code CLI**: Version 2.0.0 or higher ([Installation Guide](https://docs.claude.com/claude-code))
-- **API Key**: Anthropic API key set in environment or Claude Code config
+- **Rust**: 1.70 或更高版本
+- **Claude Code CLI**: 2.0.0 或更高版本 ([安装指南](https://docs.claude.com/claude-code))
+- **API 密钥**: 在环境变量或 Claude Code 配置中设置 Anthropic API 密钥
 
-## 🚀 Quick Start
+## 🚀 快速开始
 
-### Simple Query (One-shot)
+### 简单查询（一次性）
 
 ```rust
 use claude_agent_sdk::{query, ClaudeAgentOptions, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Simple query with default options
-    let messages = query("What is 2 + 2?", None).await?;
+    // 使用默认选项的简单查询
+    let messages = query("2 + 2 等于多少?", None).await?;
 
     for message in messages {
         if let Message::Assistant(msg) = message {
@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-With custom options:
+使用自定义选项:
 
 ```rust
 let options = ClaudeAgentOptions {
@@ -82,10 +82,10 @@ let options = ClaudeAgentOptions {
     ..Default::default()
 };
 
-let messages = query("Create a hello.txt file", Some(options)).await?;
+let messages = query("创建一个 hello.txt 文件", Some(options)).await?;
 ```
 
-### Bidirectional Conversation (Multi-turn)
+### 双向对话（多轮）
 
 ```rust
 use claude_agent_sdk::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBlock};
@@ -94,13 +94,13 @@ use claude_agent_sdk::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBloc
 async fn main() -> anyhow::Result<()> {
     let mut client = ClaudeSDKClient::new(ClaudeAgentOptions::default());
 
-    // Connect to Claude
+    // 连接到 Claude
     client.connect().await?;
 
-    // First question
-    client.query("What is the capital of France?").await?;
+    // 第一个问题
+    client.query("法国的首都是什么?").await?;
 
-    // Receive response
+    // 接收响应
     loop {
         match client.receive_message().await? {
             Some(Message::Assistant(msg)) => {
@@ -116,8 +116,8 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Follow-up question - Claude remembers context!
-    client.query("What's the population of that city?").await?;
+    // 后续问题 - Claude 会记住上下文！
+    client.query("那个城市的人口是多少?").await?;
 
     loop {
         match client.receive_message().await? {
@@ -139,19 +139,19 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-### Custom Tools (SDK MCP Servers)
+### 自定义工具（SDK MCP 服务器）
 
-Create custom in-process tools that Claude can use:
+创建 Claude 可以使用的自定义进程内工具:
 
 ```rust
 use claude_agent_sdk::{tool, create_sdk_mcp_server, ToolResult, McpToolResultContent};
 use serde_json::json;
 
 async fn greet_handler(args: serde_json::Value) -> anyhow::Result<ToolResult> {
-    let name = args["name"].as_str().unwrap_or("World");
+    let name = args["name"].as_str().unwrap_or("世界");
     Ok(ToolResult {
         content: vec![McpToolResultContent::Text {
-            text: format!("Hello, {}!", name),
+            text: format!("你好，{}！", name),
         }],
         is_error: false,
     })
@@ -161,7 +161,7 @@ async fn greet_handler(args: serde_json::Value) -> anyhow::Result<ToolResult> {
 async fn main() -> anyhow::Result<()> {
     let greet_tool = tool!(
         "greet",
-        "Greet a user",
+        "问候用户",
         json!({
             "type": "object",
             "properties": {
@@ -174,7 +174,7 @@ async fn main() -> anyhow::Result<()> {
 
     let server = create_sdk_mcp_server("my-tools", "1.0.0", vec![greet_tool]);
 
-    // Configure ClaudeClient with the MCP server and allowed tools
+    // 使用 MCP 服务器和允许的工具配置 ClaudeClient
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert("my-tools".to_string(), McpServerConfig::Sdk(server));
 
@@ -185,110 +185,110 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let mut client = ClaudeClient::new(options);
+    let mut client = ClaudeSDKClient::new(options);
     client.connect().await?;
 
-    // Claude can now use your custom tools!
-    client.query("Greet Alice").await?;
-    // ... handle responses
+    // Claude 现在可以使用你的自定义工具了！
+    client.query("问候 Alice").await?;
+    // ... 处理响应
 
     client.disconnect().await?;
     Ok(())
 }
 ```
 
-**Note**: Tools must be explicitly allowed using the format `mcp__{server_name}__{tool_name}`.
+**注意**: 工具必须使用格式 `mcp__{服务器名}__{工具名}` 明确允许。
 
-For a comprehensive guide, see [examples/MCP_INTEGRATION.md](examples/MCP_INTEGRATION.md).
+完整指南请参阅 [examples/MCP_INTEGRATION.md](examples/MCP_INTEGRATION.md)。
 
-## Architecture
+## 架构
 
-The SDK is structured in layers:
+SDK 采用分层结构:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Public API Layer                     │
+│                    公共 API 层                          │
 │  (query(), ClaudeClient, tool!(), create_sdk_server())  │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
-│                  Control Protocol Layer                 │
-│        (Query: handles bidirectional control)           │
+│                  控制协议层                              │
+│        (Query: 处理双向控制)                             │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
-│                   Transport Layer                       │
-│     (SubprocessTransport, custom implementations)       │
+│                   传输层                                 │
+│     (SubprocessTransport, 自定义实现)                    │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
 │                  Claude Code CLI                        │
-│         (external process via stdio/subprocess)         │
+│         (通过 stdio/subprocess 的外部进程)              │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Type System
+## 类型系统
 
-The SDK provides strongly-typed Rust interfaces for all Claude interactions:
+SDK 为所有 Claude 交互提供强类型的 Rust 接口:
 
-- **Messages**: `Message`, `ContentBlock`, `TextBlock`, `ToolUseBlock`, etc.
-- **Configuration**: `ClaudeAgentOptions`, `SystemPrompt`, `PermissionMode`
-- **Hooks**: `HookEvent`, `HookCallback`, `HookInput`, `HookJsonOutput`
-- **Permissions**: `PermissionResult`, `PermissionUpdate`, `CanUseToolCallback`
+- **消息**: `Message`, `ContentBlock`, `TextBlock`, `ToolUseBlock` 等
+- **配置**: `ClaudeAgentOptions`, `SystemPrompt`, `PermissionMode`
+- **钩子**: `HookEvent`, `HookCallback`, `HookInput`, `HookJsonOutput`
+- **权限**: `PermissionResult`, `PermissionUpdate`, `CanUseToolCallback`
 - **MCP**: `McpServers`, `SdkMcpServer`, `ToolHandler`, `ToolResult`
 
-## 📚 Examples
+## 📚 示例
 
-The SDK includes 15+ comprehensive examples demonstrating all features. See [examples/README.md](examples/README.md) for details.
+SDK 包含 15+ 个全面的示例，演示所有功能。详见 [examples/README.md](examples/README.md)。
 
-### Quick Examples
+### 快速示例
 
 ```bash
-# Basic usage
-cargo run --example 01_hello_world        # Simple query with tool usage
-cargo run --example 02_limit_tool_use     # Restrict allowed tools
-cargo run --example 03_monitor_tools      # Monitor tool execution
+# 基础用法
+cargo run --example 01_hello_world        # 带工具使用的简单查询
+cargo run --example 02_limit_tool_use     # 限制允许的工具
+cargo run --example 03_monitor_tools      # 监控工具执行
 
-# Streaming & Conversations
-cargo run --example 06_bidirectional_client  # Multi-turn conversations
-cargo run --example 14_streaming_mode -- all # Comprehensive streaming patterns
+# 流式传输和对话
+cargo run --example 06_bidirectional_client  # 多轮对话
+cargo run --example 14_streaming_mode -- all # 全面的流式传输模式
 
-# Hooks & Control
-cargo run --example 05_hooks_pretooluse      # PreToolUse hooks
-cargo run --example 15_hooks_comprehensive -- all  # All hook types
-cargo run --example 07_dynamic_control       # Runtime control
+# 钩子和控制
+cargo run --example 05_hooks_pretooluse      # PreToolUse 钩子
+cargo run --example 15_hooks_comprehensive -- all  # 所有钩子类型
+cargo run --example 07_dynamic_control       # 运行时控制
 
-# Custom Tools & MCP
-cargo run --example 08_mcp_server_integration  # In-process MCP servers
+# 自定义工具和 MCP
+cargo run --example 08_mcp_server_integration  # 进程内 MCP 服务器
 
-# Configuration
-cargo run --example 09_agents               # Custom agents
-cargo run --example 11_setting_sources -- all  # Settings control
-cargo run --example 13_system_prompt        # System prompt configs
+# 配置
+cargo run --example 09_agents               # 自定义代理
+cargo run --example 11_setting_sources -- all  # 设置控制
+cargo run --example 13_system_prompt        # 系统提示配置
 ```
 
-### Example Categories
+### 示例分类
 
-| Category | Examples | Description |
-|----------|----------|-------------|
-| **Basics** | 01-03 | Simple queries, tool control, monitoring |
-| **Advanced** | 04-07 | Permissions, hooks, streaming, dynamic control |
-| **MCP** | 08 | Custom tools and MCP server integration |
-| **Config** | 09-13 | Agents, settings, prompts, debugging |
-| **Patterns** | 14-15 | Comprehensive streaming and hooks patterns |
+| 类别 | 示例 | 描述 |
+|------|------|------|
+| **基础** | 01-03 | 简单查询、工具控制、监控 |
+| **高级** | 04-07 | 权限、钩子、流式传输、动态控制 |
+| **MCP** | 08 | 自定义工具和 MCP 服务器集成 |
+| **配置** | 09-13 | 代理、设置、提示、调试 |
+| **模式** | 14-15 | 全面的流式传输和钩子模式 |
 
-## 📖 API Overview
+## 📖 API 概览
 
-### Core Types
+### 核心类型
 
 ```rust
-// Main client for bidirectional streaming
+// 双向流式传输的主客户端
 ClaudeSDKClient
 
-// Simple query function for one-shot interactions
+// 用于一次性交互的简单查询函数
 query(prompt: &str, options: Option<ClaudeAgentOptions>) -> Vec<Message>
 
-// Configuration
+// 配置
 ClaudeAgentOptions {
     model: Option<String>,
     max_turns: Option<u32>,
@@ -296,45 +296,45 @@ ClaudeAgentOptions {
     system_prompt: Option<SystemPromptConfig>,
     hooks: Option<HashMap<String, Vec<HookMatcher>>>,
     mcp_servers: Option<HashMap<String, McpServer>>,
-    // ... and more
+    // ... 更多
 }
 
-// Messages
+// 消息
 Message::Assistant(AssistantMessage)
 Message::User(UserMessage)
 Message::System(SystemMessage)
 Message::Result(ResultMessage)
 ```
 
-### ClaudeSDKClient (Bidirectional Streaming)
+### ClaudeSDKClient（双向流式传输）
 
 ```rust
-// Create and connect
+// 创建并连接
 let mut client = ClaudeSDKClient::new(options);
 client.connect().await?;
 
-// Send queries
-client.query("Hello").await?;
+// 发送查询
+client.query("你好").await?;
 
-// Receive messages
+// 接收消息
 loop {
     match client.receive_message().await? {
-        Some(Message::Assistant(msg)) => { /* Handle */ }
+        Some(Message::Assistant(msg)) => { /* 处理 */ }
         Some(Message::Result(_)) => break,
         None => break,
         _ => continue,
     }
 }
 
-// Dynamic control (mid-execution)
-client.interrupt().await?;  // Stop current operation
-// Client will handle the interrupt automatically
+// 动态控制（执行中）
+client.interrupt().await?;  // 停止当前操作
+// 客户端会自动处理中断
 
-// Disconnect
+// 断开连接
 client.disconnect().await?;
 ```
 
-### Hooks System
+### 钩子系统
 
 ```rust
 use claude_agent_sdk::{Hook, HookMatcher, HookInput, HookContext, HookJSONOutput};
@@ -344,7 +344,7 @@ async fn my_hook(
     tool_use_id: Option<String>,
     context: HookContext,
 ) -> anyhow::Result<HookJSONOutput> {
-    // Block dangerous commands
+    // 阻止危险命令
     if let Some(command) = input.get("tool_input")
         .and_then(|v| v.get("command"))
         .and_then(|v| v.as_str())
@@ -353,7 +353,7 @@ async fn my_hook(
             return Ok(serde_json::json!({
                 "hookSpecificOutput": {
                     "permissionDecision": "deny",
-                    "permissionDecisionReason": "Dangerous command blocked"
+                    "permissionDecisionReason": "危险命令已阻止"
                 }
             }));
         }
@@ -375,69 +375,69 @@ let options = ClaudeAgentOptions {
 };
 ```
 
-## 🧪 Development
+## 🧪 开发
 
-### Running Tests
+### 运行测试
 
 ```bash
-# Run all tests
+# 运行所有测试
 cargo test
 
-# Run tests with output
+# 带输出运行测试
 cargo test -- --nocapture
 
-# Run specific test
+# 运行特定测试
 cargo test test_name
 ```
 
-### Code Quality
+### 代码质量
 
 ```bash
-# Check code with clippy
+# 使用 clippy 检查代码
 cargo clippy --all-targets --all-features
 
-# Format code
+# 格式化代码
 cargo fmt
 
-# Check formatting
+# 检查格式化
 cargo fmt -- --check
 ```
 
-### Building
+### 构建
 
 ```bash
-# Build library
+# 构建库
 cargo build
 
-# Build with release optimizations
+# 使用发布优化构建
 cargo build --release
 
-# Build all examples
+# 构建所有示例
 cargo build --examples
 
-# Build documentation
+# 构建文档
 cargo doc --open
 ```
 
-## 🔧 Troubleshooting
+## 🔧 故障排除
 
-### Common Issues
+### 常见问题
 
-**"Claude Code CLI not found"**
-- Install Claude Code CLI: https://docs.claude.com/claude-code
-- Ensure `claude` is in your PATH
+**"找不到 Claude Code CLI"**
+- 安装 Claude Code CLI: https://docs.claude.com/claude-code
+- 确保 `claude` 在你的 PATH 中
 
-**"API key not configured"**
-- Set `ANTHROPIC_API_KEY` environment variable
-- Or configure via Claude Code CLI settings
+**"API 密钥未配置"**
+- 设置 `ANTHROPIC_API_KEY` 环境变量
+- 或通过 Claude Code CLI 设置配置
 
-**"Permission denied" errors**
-- Use `permission_mode: PermissionMode::AcceptEdits` for automated workflows
-- Or implement custom permission callbacks
+**"权限被拒绝"错误**
+- 对于自动化工作流，使用 `permission_mode: PermissionMode::AcceptEdits`
+- 或实现自定义权限回调
 
-### Debug Mode
+### 调试模式
 
-Enable debug output to see what's happening:
+启用调试输出以查看正在发生的事情:
 
 ```rust
 let options = ClaudeAgentOptions {
@@ -451,9 +451,9 @@ let options = ClaudeAgentOptions {
 };
 ```
 
-## Python SDK Comparison
+## Python SDK 对比
 
-The Rust SDK closely mirrors the Python SDK API:
+Rust SDK 紧密镜像 Python SDK API:
 
 | Python | Rust |
 |--------|------|
@@ -463,52 +463,52 @@ The Rust SDK closely mirrors the Python SDK API:
 | `await client.interrupt()` | `client.interrupt().await?` |
 | `await client.disconnect()` | `client.disconnect().await?` |
 
-## 🤝 Contributing
+## 🤝 贡献
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+欢迎贡献！请随时提交 Pull Request。
 
-### Development Setup
+### 开发设置
 
 ```bash
-# Clone the repository
+# 克隆仓库
 git clone https://github.com/yourusername/claude-agent-sdk-rs
 cd claude-agent-sdk-rs
 
-# Install dependencies
+# 安装依赖
 cargo build
 
-# Run tests
+# 运行测试
 cargo test
 
-# Run examples
+# 运行示例
 cargo run --example 01_hello_world
 ```
 
-### Guidelines
+### 指南
 
-- Follow Rust conventions and idioms
-- Add tests for new features
-- Update documentation and examples
-- Run `cargo fmt` and `cargo clippy` before submitting
+- 遵循 Rust 约定和惯用法
+- 为新功能添加测试
+- 更新文档和示例
+- 提交前运行 `cargo fmt` 和 `cargo clippy`
 
-This SDK is based on the [claude-agent-sdk-python](https://github.com/anthropics/claude-agent-sdk-python) specification.
+本 SDK 基于 [claude-agent-sdk-python](https://github.com/anthropics/claude-agent-sdk-python) 规范。
 
-## License
+## 许可证
 
-This project is distributed under the terms of MIT.
+本项目根据 MIT 许可证条款分发。
 
-See [LICENSE.md](LICENSE.md) for details.
+详见 [LICENSE.md](LICENSE.md)。
 
-## 🔗 Related Projects
+## 🔗 相关项目
 
-- [Claude Code CLI](https://docs.claude.com/claude-code) - Official Claude Code command-line interface
-- [Claude Agent SDK for Python](https://github.com/anthropics/claude-agent-sdk-python) - Official Python SDK
-- [Anthropic API](https://www.anthropic.com/api) - Claude API documentation
+- [Claude Code CLI](https://docs.claude.com/claude-code) - 官方 Claude Code 命令行界面
+- [Claude Agent SDK for Python](https://github.com/anthropics/claude-agent-sdk-python) - 官方 Python SDK
+- [Anthropic API](https://www.anthropic.com/api) - Claude API 文档
 
-## ⭐ Show Your Support
+## ⭐ 支持
 
-If you find this project useful, please consider giving it a star on GitHub!
+如果你觉得这个项目有用，请考虑在 GitHub 上给它一个星标！
 
-## 📝 Changelog
+## 📝 更新日志
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and changes.
+版本历史和更改请参阅 [CHANGELOG.md](CHANGELOG.md)。

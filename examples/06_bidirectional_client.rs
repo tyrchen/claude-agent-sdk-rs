@@ -1,6 +1,6 @@
 //! Example demonstrating bidirectional communication with ClaudeClient
 //!
-//! This example shows how to use ClaudeClient (analogous to Python's ClaudeSDKClient)
+//! This example shows how to use ClaudeClient (analogous to Python's ClaudeClient)
 //! for bidirectional, streaming communication with Claude Code.
 //!
 //! Key features demonstrated:
@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut client = ClaudeClient::new(options);
 
-    // Connect to Claude (analogous to Python's `async with ClaudeSDKClient()`)
+    // Connect to Claude (analogous to Python's `async with ClaudeClient()`)
     println!("Connecting to Claude...");
     client.connect().await?;
     println!("Connected!\n");

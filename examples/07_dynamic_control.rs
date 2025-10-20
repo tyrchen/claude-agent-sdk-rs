@@ -5,7 +5,7 @@
 //! - set_permission_mode() - Change permission mode on the fly
 //! - set_model() - Switch AI models during the session
 //!
-//! These methods are analogous to Python's ClaudeSDKClient methods.
+//! These methods are analogous to Python's ClaudeClient methods.
 //!
 //! Run with:
 //! ```bash
