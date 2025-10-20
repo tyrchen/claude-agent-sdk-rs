@@ -8,9 +8,11 @@
 //! - Creating custom tools with the `tool!` macro
 //! - Building an SDK MCP server with multiple tools
 //! - Integrating MCP servers with ClaudeClient
+//! - Configuring allowed_tools to enable custom tools
 //! - Using custom tools in a bidirectional conversation
 //!
-//! The example creates a "math-tools" MCP server with calculator and statistics tools.
+//! The example creates a "math-tools" MCP server with calculator, statistics, and
+//! random number generator tools.
 //!
 //! Run with:
 //! ```bash
@@ -237,6 +239,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let options = ClaudeAgentOptions {
         mcp_servers: McpServers::Dict(mcp_servers),
+        // IMPORTANT: Tools must be explicitly allowed with format mcp__{server_name}__{tool_name}
+        allowed_tools: vec![
+            "mcp__math-tools__calculator".to_string(),
+            "mcp__math-tools__statistics".to_string(),
+            "mcp__math-tools__random_number".to_string(),
+        ],
         max_turns: Some(10),
         permission_mode: Some(claude_agent_sdk::PermissionMode::AcceptEdits),
         ..Default::default()

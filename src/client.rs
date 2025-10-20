@@ -108,6 +108,24 @@ impl ClaudeClient {
         let mut query = QueryFull::new(Box::new(transport));
         query.set_stdin(stdin);
 
+        // Extract SDK MCP servers from options
+        let sdk_mcp_servers =
+            if let crate::types::mcp::McpServers::Dict(servers_dict) = &self.options.mcp_servers {
+                servers_dict
+                    .iter()
+                    .filter_map(|(name, config)| {
+                        if let crate::types::mcp::McpServerConfig::Sdk(sdk_config) = config {
+                            Some((name.clone(), sdk_config.clone()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            } else {
+                std::collections::HashMap::new()
+            };
+        query.set_sdk_mcp_servers(sdk_mcp_servers).await;
+
         // Convert hooks to internal format
         let hooks = self.options.hooks.as_ref().map(|hooks_map| {
             hooks_map

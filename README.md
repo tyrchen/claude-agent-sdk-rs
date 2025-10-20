@@ -123,11 +123,30 @@ async fn main() -> anyhow::Result<()> {
 
     let server = create_sdk_mcp_server("my-tools", "1.0.0", vec![greet_tool]);
 
-    // Configure and use with ClaudeClient
-    // See examples/08_mcp_server_integration.rs for complete example
+    // Configure ClaudeClient with the MCP server and allowed tools
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert("my-tools".to_string(), McpServerConfig::Sdk(server));
+
+    let options = ClaudeAgentOptions {
+        mcp_servers: McpServers::Dict(mcp_servers),
+        allowed_tools: vec!["mcp__my-tools__greet".to_string()],
+        permission_mode: Some(PermissionMode::AcceptEdits),
+        ..Default::default()
+    };
+
+    let mut client = ClaudeClient::new(options);
+    client.connect().await?;
+
+    // Claude can now use your custom tools!
+    client.query("Greet Alice").await?;
+    // ... handle responses
+
+    client.disconnect().await?;
     Ok(())
 }
 ```
+
+**Note**: Tools must be explicitly allowed using the format `mcp__{server_name}__{tool_name}`.
 
 For a comprehensive guide, see [examples/MCP_INTEGRATION.md](examples/MCP_INTEGRATION.md).
 

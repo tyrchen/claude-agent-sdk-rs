@@ -10,6 +10,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
+use crate::types::mcp::McpSdkServerConfig;
 
 use super::transport::Transport;
 
@@ -55,6 +56,7 @@ struct IncomingControlRequest {
 pub struct QueryFull {
     pub(crate) transport: Arc<Mutex<Box<dyn Transport>>>,
     hook_callbacks: Arc<Mutex<HashMap<String, HookCallback>>>,
+    sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
     next_callback_id: Arc<AtomicU64>,
     request_counter: Arc<AtomicU64>,
     pending_responses: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
@@ -72,6 +74,7 @@ impl QueryFull {
         Self {
             transport: Arc::new(Mutex::new(transport)),
             hook_callbacks: Arc::new(Mutex::new(HashMap::new())),
+            sdk_mcp_servers: Arc::new(Mutex::new(HashMap::new())),
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(Mutex::new(HashMap::new())),
@@ -84,6 +87,11 @@ impl QueryFull {
     /// Set stdin for direct write access (called from client after transport is connected)
     pub fn set_stdin(&mut self, stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>) {
         self.stdin = Some(stdin);
+    }
+
+    /// Set SDK MCP servers
+    pub async fn set_sdk_mcp_servers(&mut self, servers: HashMap<String, McpSdkServerConfig>) {
+        *self.sdk_mcp_servers.lock().await = servers;
     }
 
     /// Initialize with hooks
@@ -136,6 +144,7 @@ impl QueryFull {
     pub async fn start(&self) -> Result<()> {
         let transport = Arc::clone(&self.transport);
         let hook_callbacks = Arc::clone(&self.hook_callbacks);
+        let sdk_mcp_servers = Arc::clone(&self.sdk_mcp_servers);
         let pending_responses = Arc::clone(&self.pending_responses);
         let message_tx = self.message_tx.clone();
         let stdin = self.stdin.clone();
@@ -169,18 +178,20 @@ impl QueryFull {
                                 }
                             }
                             Some("control_request") => {
-                                // Handle incoming control request (e.g., hook callback)
+                                // Handle incoming control request (e.g., hook callback, MCP message)
                                 if let Ok(request) = serde_json::from_value::<IncomingControlRequest>(
                                     message.clone(),
                                 ) {
                                     let stdin_clone = stdin.clone();
                                     let hook_callbacks_clone = Arc::clone(&hook_callbacks);
+                                    let sdk_mcp_servers_clone = Arc::clone(&sdk_mcp_servers);
 
                                     tokio::spawn(async move {
                                         if let Err(e) = Self::handle_control_request_with_stdin(
                                             request,
                                             stdin_clone,
                                             hook_callbacks_clone,
+                                            sdk_mcp_servers_clone,
                                         )
                                         .await
                                         {
@@ -213,6 +224,7 @@ impl QueryFull {
         request: IncomingControlRequest,
         stdin: Option<Arc<Mutex<Option<tokio::process::ChildStdin>>>>,
         hook_callbacks: Arc<Mutex<HashMap<String, HookCallback>>>,
+        sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
     ) -> Result<()> {
         let request_id = request.request_id;
         let request_data = request.request;
@@ -259,6 +271,27 @@ impl QueryFull {
                 serde_json::to_value(&hook_output).map_err(|e| {
                     ClaudeError::ControlProtocol(format!("Failed to serialize hook output: {}", e))
                 })?
+            }
+            "mcp_message" => {
+                // Handle SDK MCP message
+                let server_name = request_data
+                    .get("server_name")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ClaudeError::ControlProtocol(
+                            "Missing server_name for mcp_message".to_string(),
+                        )
+                    })?;
+
+                let mcp_message = request_data.get("message").ok_or_else(|| {
+                    ClaudeError::ControlProtocol("Missing message for mcp_message".to_string())
+                })?;
+
+                let mcp_response =
+                    Self::handle_sdk_mcp_request(sdk_mcp_servers, server_name, mcp_message.clone())
+                        .await?;
+
+                json!({"mcp_response": mcp_response})
             }
             _ => {
                 return Err(ClaudeError::ControlProtocol(format!(
@@ -419,5 +452,24 @@ impl QueryFull {
 
         self.send_control_request(request).await?;
         Ok(())
+    }
+
+    /// Handle SDK MCP request by routing to the appropriate server
+    async fn handle_sdk_mcp_request(
+        sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
+        server_name: &str,
+        message: serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        let servers = sdk_mcp_servers.lock().await;
+        let server_config = servers.get(server_name).ok_or_else(|| {
+            ClaudeError::ControlProtocol(format!("SDK MCP server not found: {}", server_name))
+        })?;
+
+        // Call the server's handle_message method
+        server_config
+            .instance
+            .handle_message(message)
+            .await
+            .map_err(|e| ClaudeError::ControlProtocol(format!("MCP server error: {}", e)))
     }
 }
