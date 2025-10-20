@@ -1,0 +1,10 @@
+The quick brown fox jumps over the lazy dog.
+This is a sample text file created to test the word counter script.
+It contains multiple lines with various words.
+
+Python is a powerful programming language that is widely used for
+web development, data analysis, artificial intelligence, and more.
+
+The word counter script should be able to read this file and
+accurately count all the words, including those separated by
+newlines and multiple spaces.
