@@ -24,7 +24,7 @@ use crate::types::messages::Message;
 /// # Example
 ///
 /// ```no_run
-/// use claude_agent_sdk::{ClaudeClient, ClaudeAgentOptions};
+/// use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
 /// use futures::StreamExt;
 ///
 /// #[tokio::main]
@@ -66,7 +66,7 @@ impl ClaudeClient {
     /// # Example
     ///
     /// ```no_run
-    /// use claude_agent_sdk::{ClaudeClient, ClaudeAgentOptions};
+    /// use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
     ///
     /// let client = ClaudeClient::new(ClaudeAgentOptions::default());
     /// ```
@@ -174,7 +174,7 @@ impl ClaudeClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use claude_agent_sdk::{ClaudeClient, ClaudeAgentOptions};
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
@@ -247,7 +247,7 @@ impl ClaudeClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use claude_agent_sdk::{ClaudeClient, ClaudeAgentOptions};
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
     /// # use futures::StreamExt;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -316,7 +316,7 @@ impl ClaudeClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use claude_agent_sdk::{ClaudeClient, ClaudeAgentOptions, Message};
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, Message};
     /// # use futures::StreamExt;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -455,7 +455,7 @@ impl ClaudeClient {
     /// # Example
     ///
     /// ```no_run
-    /// # use claude_agent_sdk::{ClaudeClient, ClaudeAgentOptions};
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());

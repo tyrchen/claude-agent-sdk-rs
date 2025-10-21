@@ -3,7 +3,7 @@
 //! This test file validates that all Rust types can deserialize real JSON responses
 //! from the Claude Agent SDK Python implementation.
 
-use claude_agent_sdk::types::messages::*;
+use claude_agent_sdk_rs::types::messages::*;
 
 /// Test helper to load and deserialize a message from filesystem
 fn load_fixture(filename: &str) -> Message {

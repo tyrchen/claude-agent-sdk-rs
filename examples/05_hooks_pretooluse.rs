@@ -8,7 +8,7 @@
 //!
 //! This matches the Python SDK implementation exactly.
 
-use claude_agent_sdk::{
+use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, ContentBlock, HookContext, HookEvent, HookInput,
     HookJsonOutput, HookMatcher, HookSpecificOutput, Message, PreToolUseHookSpecificOutput,
     SyncHookJsonOutput,
@@ -140,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
 
     let options = ClaudeAgentOptions {
         allowed_tools: vec!["Write".to_string(), "Bash".to_string()],
-        permission_mode: Some(claude_agent_sdk::PermissionMode::AcceptEdits),
+        permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         max_turns: Some(5),
         hooks: Some(hooks),
         ..Default::default()

@@ -8,7 +8,7 @@
 //! 2. Tracks all tool uses
 //! 3. Prints detailed information about each tool invocation
 
-use claude_agent_sdk::{query, ClaudeAgentOptions, ContentBlock, Message};
+use claude_agent_sdk_rs::{query, ClaudeAgentOptions, ContentBlock, Message};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     // Configure options
     let options = ClaudeAgentOptions {
         allowed_tools: vec!["Write".to_string(), "Read".to_string(), "Bash".to_string()],
-        permission_mode: Some(claude_agent_sdk::PermissionMode::AcceptEdits),
+        permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         max_turns: Some(10),
         stderr_callback: Some(std::sync::Arc::new(|msg| {
             if !msg.trim().is_empty() && !msg.contains("STDERR:") {

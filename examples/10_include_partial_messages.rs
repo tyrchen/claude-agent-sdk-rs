@@ -12,7 +12,7 @@
 //! Note: Partial message streaming requires the CLI to support it, and the
 //! messages will include StreamEvent messages interspersed with regular messages.
 
-use claude_agent_sdk::{ClaudeAgentOptions, ClaudeClient, Message};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ClaudeClient, Message};
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
             }
             Message::Assistant(msg) => {
                 for block in &msg.message.content {
-                    if let claude_agent_sdk::ContentBlock::Text(text) = block {
+                    if let claude_agent_sdk_rs::ContentBlock::Text(text) = block {
                         println!("Claude: {}", text.text);
                     }
                 }

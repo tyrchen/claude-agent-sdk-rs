@@ -19,7 +19,7 @@
 //! cargo run --example 08_mcp_server_integration
 //! ```
 
-use claude_agent_sdk::{
+use claude_agent_sdk_rs::{
     create_sdk_mcp_server, tool, ClaudeAgentOptions, ClaudeClient, ContentBlock, McpServers,
     McpToolResultContent, Message, ToolResult,
 };
@@ -234,7 +234,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "math-tools".to_string(),
-        claude_agent_sdk::McpServerConfig::Sdk(math_server),
+        claude_agent_sdk_rs::McpServerConfig::Sdk(math_server),
     );
 
     let options = ClaudeAgentOptions {
@@ -246,7 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "mcp__math-tools__random_number".to_string(),
         ],
         max_turns: Some(10),
-        permission_mode: Some(claude_agent_sdk::PermissionMode::AcceptEdits),
+        permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         ..Default::default()
     };
 
@@ -284,7 +284,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
                         if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk::ToolResultContent::Text(text)) =
+                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
                             {
                                 println!("📊 Tool result: {}", text);
@@ -333,7 +333,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
                         if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk::ToolResultContent::Text(text)) =
+                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
                             {
                                 println!("📊 Tool result: {}", text);
@@ -382,7 +382,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
                         if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk::ToolResultContent::Text(text)) =
+                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
                             {
                                 println!("📊 Tool result: {}", text);
@@ -431,7 +431,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
                         if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk::ToolResultContent::Text(text)) =
+                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
                             {
                                 println!("📊 Tool result: {}", text);

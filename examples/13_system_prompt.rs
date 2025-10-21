@@ -10,7 +10,7 @@
 //! it's equivalent to no system prompt override. When append is provided, it uses
 //! --append-system-prompt to extend the default prompt.
 
-use claude_agent_sdk::{
+use claude_agent_sdk_rs::{
     query, ClaudeAgentOptions, ContentBlock, Message, SystemPrompt, SystemPromptPreset,
 };
 

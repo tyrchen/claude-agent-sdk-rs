@@ -12,7 +12,7 @@
 //! cargo run --example 14_streaming_mode all - Run all examples
 //! cargo run --example 14_streaming_mode basic_streaming - Run a specific example
 
-use claude_agent_sdk::{
+use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, ToolResultContent,
 };
 use futures::StreamExt;

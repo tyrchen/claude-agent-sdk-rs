@@ -4,7 +4,7 @@
 //! Note: Most tests are marked as #[ignore] by default since they require
 //! a working Claude CLI installation and API access.
 
-use claude_agent_sdk::{
+use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, HookEvent, HookInput, HookJsonOutput, HookMatcher, Message,
     PermissionMode, SyncHookJsonOutput,
 };

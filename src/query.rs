@@ -14,7 +14,7 @@ use crate::types::messages::Message;
 /// # Examples
 ///
 /// ```no_run
-/// use claude_agent_sdk::{query, Message, ContentBlock};
+/// use claude_agent_sdk_rs::{query, Message, ContentBlock};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {

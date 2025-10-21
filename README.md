@@ -1,7 +1,7 @@
 # Claude Agent SDK for Rust
 
-[![Crates.io](https://img.shields.io/crates/v/claude-agent-sdk.svg)](https://crates.io/crates/claude-agent-sdk)
-[![Documentation](https://docs.rs/claude-agent-sdk/badge.svg)](https://docs.rs/claude-agent-sdk)
+[![Crates.io](https://img.shields.io/crates/v/claude-agent-sdk-rs.svg)](https://crates.io/crates/claude-agent-sdk-rs)
+[![Documentation](https://docs.rs/claude-agent-sdk-rs/badge.svg)](https://docs.rs/claude-agent-sdk-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 
 [English](README.md) | [中文](README_zh-CN.md)
@@ -29,14 +29,14 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-claude-agent-sdk = "0.1"
+claude-agent-sdk-rs = "0.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
 Or use cargo-add:
 
 ```bash
-cargo add claude-agent-sdk
+cargo add claude-agent-sdk-rs
 cargo add tokio --features full
 ```
 
@@ -51,7 +51,7 @@ cargo add tokio --features full
 ### Simple Query (One-shot)
 
 ```rust
-use claude_agent_sdk::{query, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{query, ClaudeAgentOptions, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -88,7 +88,7 @@ let messages = query("Create a hello.txt file", Some(options)).await?;
 ### Bidirectional Conversation (Multi-turn)
 
 ```rust
-use claude_agent_sdk::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -144,7 +144,7 @@ async fn main() -> anyhow::Result<()> {
 Create custom in-process tools that Claude can use:
 
 ```rust
-use claude_agent_sdk::{tool, create_sdk_mcp_server, ToolResult, McpToolResultContent};
+use claude_agent_sdk_rs::{tool, create_sdk_mcp_server, ToolResult, McpToolResultContent};
 use serde_json::json;
 
 async fn greet_handler(args: serde_json::Value) -> anyhow::Result<ToolResult> {
@@ -337,7 +337,7 @@ client.disconnect().await?;
 ### Hooks System
 
 ```rust
-use claude_agent_sdk::{Hook, HookMatcher, HookInput, HookContext, HookJSONOutput};
+use claude_agent_sdk_rs::{Hook, HookMatcher, HookInput, HookContext, HookJSONOutput};
 
 async fn my_hook(
     input: HookInput,

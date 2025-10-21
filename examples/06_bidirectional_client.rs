@@ -15,7 +15,7 @@
 //! cargo run --example 06_bidirectional_client
 //! ```
 
-use claude_agent_sdk::{ClaudeAgentOptions, ClaudeClient, ContentBlock, Message};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ClaudeClient, ContentBlock, Message};
 use futures::StreamExt;
 
 #[tokio::main]

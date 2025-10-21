@@ -12,7 +12,9 @@
 //! cargo run --example 07_dynamic_control
 //! ```
 
-use claude_agent_sdk::{ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, PermissionMode};
+use claude_agent_sdk_rs::{
+    ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, PermissionMode,
+};
 use futures::StreamExt;
 use std::time::Duration;
 use tokio::time::sleep;

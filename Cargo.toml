@@ -1,11 +1,11 @@
 [package]
-name = "claude-agent-sdk"
+name = "claude-agent-sdk-rs"
 version = "0.1.1"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2021"
 rust-version = "1.70"
 license = "MIT"
-documentation = "https://docs.rs/claude-agent-sdk"
+documentation = "https://docs.rs/claude-agent-sdk-rs"
 repository = "https://github.com/tyrchen/claude-agent-sdk-rs"
 homepage = "https://github.com/tyrchen/claude-agent-sdk-rs"
 description = "Rust SDK for Claude Code CLI with bidirectional streaming, hooks, and custom tools support"

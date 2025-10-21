@@ -19,7 +19,7 @@
 //! cargo run --example 04_permission_callbacks
 //! ```
 
-use claude_agent_sdk::{
+use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, PermissionResult,
     PermissionResultDeny, ToolPermissionContext,
 };
@@ -148,7 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configure options with permission callback
     let options = ClaudeAgentOptions {
         allowed_tools: vec!["Write".to_string(), "Read".to_string(), "Bash".to_string()],
-        permission_mode: Some(claude_agent_sdk::PermissionMode::AcceptEdits),
+        permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         can_use_tool: Some(permission_callback),
         max_turns: Some(10),
         ..Default::default()

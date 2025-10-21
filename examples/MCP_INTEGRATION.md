@@ -19,7 +19,7 @@ This example focuses on **SDK MCP servers** (in-process tools).
 Use the `tool!` macro to define custom tools:
 
 ```rust
-use claude_agent_sdk::{tool, ToolResult, McpToolResultContent};
+use claude_agent_sdk_rs::{tool, ToolResult, McpToolResultContent};
 use serde_json::json;
 
 async fn calculator_handler(args: serde_json::Value) -> anyhow::Result<ToolResult> {
@@ -64,7 +64,7 @@ let calculator_tool = tool!(
 Combine tools into an MCP server:
 
 ```rust
-use claude_agent_sdk::create_sdk_mcp_server;
+use claude_agent_sdk_rs::create_sdk_mcp_server;
 
 let server = create_sdk_mcp_server(
     "my-tools",           // Server name
@@ -78,7 +78,7 @@ let server = create_sdk_mcp_server(
 Add the MCP server to your client configuration:
 
 ```rust
-use claude_agent_sdk::{ClaudeAgentOptions, ClaudeClient, McpServers, McpServerConfig};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ClaudeClient, McpServers, McpServerConfig};
 use std::collections::HashMap;
 
 let mut mcp_servers = HashMap::new();
@@ -86,7 +86,7 @@ mcp_servers.insert("my-tools".to_string(), McpServerConfig::Sdk(server));
 
 let options = ClaudeAgentOptions {
     mcp_servers: McpServers::Dict(mcp_servers),
-    permission_mode: Some(claude_agent_sdk::PermissionMode::AcceptEdits),
+    permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
     ..Default::default()
 };
 
@@ -218,7 +218,7 @@ For external MCP servers (stdio, SSE, HTTP), use different configuration types:
 ### Stdio MCP Server
 
 ```rust
-use claude_agent_sdk::{McpServerConfig, McpStdioServerConfig};
+use claude_agent_sdk_rs::{McpServerConfig, McpStdioServerConfig};
 use std::collections::HashMap;
 
 let server_config = McpServerConfig::Stdio(McpStdioServerConfig {
@@ -231,7 +231,7 @@ let server_config = McpServerConfig::Stdio(McpStdioServerConfig {
 ### SSE MCP Server
 
 ```rust
-use claude_agent_sdk::{McpServerConfig, McpSseServerConfig};
+use claude_agent_sdk_rs::{McpServerConfig, McpSseServerConfig};
 
 let server_config = McpServerConfig::Sse(McpSseServerConfig {
     url: "http://localhost:3000/sse".to_string(),

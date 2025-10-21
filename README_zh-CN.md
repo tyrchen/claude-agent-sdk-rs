@@ -1,7 +1,7 @@
 # Claude Agent SDK for Rust
 
-[![Crates.io](https://img.shields.io/crates/v/claude-agent-sdk.svg)](https://crates.io/crates/claude-agent-sdk)
-[![Documentation](https://docs.rs/claude-agent-sdk/badge.svg)](https://docs.rs/claude-agent-sdk)
+[![Crates.io](https://img.shields.io/crates/v/claude-agent-sdk-rs.svg)](https://crates.io/crates/claude-agent-sdk-rs)
+[![Documentation](https://docs.rs/claude-agent-sdk-rs/badge.svg)](https://docs.rs/claude-agent-sdk-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 
 [English](README.md) | [中文](README_zh-CN.md)
@@ -29,14 +29,14 @@ Rust SDK 用于与 Claude Code CLI 交互，提供对 Claude 功能的编程访�
 
 ```toml
 [dependencies]
-claude-agent-sdk = "0.1"
+claude-agent-sdk-rs = "0.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
 或使用 cargo-add:
 
 ```bash
-cargo add claude-agent-sdk
+cargo add claude-agent-sdk-rs
 cargo add tokio --features full
 ```
 
@@ -51,7 +51,7 @@ cargo add tokio --features full
 ### 简单查询（一次性）
 
 ```rust
-use claude_agent_sdk::{query, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{query, ClaudeAgentOptions, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -88,7 +88,7 @@ let messages = query("创建一个 hello.txt 文件", Some(options)).await?;
 ### 双向对话（多轮）
 
 ```rust
-use claude_agent_sdk::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -144,7 +144,7 @@ async fn main() -> anyhow::Result<()> {
 创建 Claude 可以使用的自定义进程内工具:
 
 ```rust
-use claude_agent_sdk::{tool, create_sdk_mcp_server, ToolResult, McpToolResultContent};
+use claude_agent_sdk_rs::{tool, create_sdk_mcp_server, ToolResult, McpToolResultContent};
 use serde_json::json;
 
 async fn greet_handler(args: serde_json::Value) -> anyhow::Result<ToolResult> {
@@ -269,13 +269,13 @@ cargo run --example 13_system_prompt        # 系统提示配置
 
 ### 示例分类
 
-| 类别 | 示例 | 描述 |
-|------|------|------|
-| **基础** | 01-03 | 简单查询、工具控制、监控 |
+| 类别     | 示例  | 描述                           |
+| -------- | ----- | ------------------------------ |
+| **基础** | 01-03 | 简单查询、工具控制、监控       |
 | **高级** | 04-07 | 权限、钩子、流式传输、动态控制 |
-| **MCP** | 08 | 自定义工具和 MCP 服务器集成 |
-| **配置** | 09-13 | 代理、设置、提示、调试 |
-| **模式** | 14-15 | 全面的流式传输和钩子模式 |
+| **MCP**  | 08    | 自定义工具和 MCP 服务器集成    |
+| **配置** | 09-13 | 代理、设置、提示、调试         |
+| **模式** | 14-15 | 全面的流式传输和钩子模式       |
 
 ## 📖 API 概览
 
@@ -337,7 +337,7 @@ client.disconnect().await?;
 ### 钩子系统
 
 ```rust
-use claude_agent_sdk::{Hook, HookMatcher, HookInput, HookContext, HookJSONOutput};
+use claude_agent_sdk_rs::{Hook, HookMatcher, HookInput, HookContext, HookJSONOutput};
 
 async fn my_hook(
     input: HookInput,
@@ -424,14 +424,17 @@ cargo doc --open
 ### 常见问题
 
 **"找不到 Claude Code CLI"**
-- 安装 Claude Code CLI: https://docs.claude.com/claude-code
+
+- 安装 Claude Code CLI: <https://docs.claude.com/claude-code>
 - 确保 `claude` 在你的 PATH 中
 
 **"API 密钥未配置"**
+
 - 设置 `ANTHROPIC_API_KEY` 环境变量
 - 或通过 Claude Code CLI 设置配置
 
 **"权限被拒绝"错误**
+
 - 对于自动化工作流，使用 `permission_mode: PermissionMode::AcceptEdits`
 - 或实现自定义权限回调
 
@@ -455,13 +458,13 @@ let options = ClaudeAgentOptions {
 
 Rust SDK 紧密镜像 Python SDK API:
 
-| Python | Rust |
-|--------|------|
-| `async with ClaudeSDKClient() as client:` | `client.connect().await?` |
-| `await client.query("...")` | `client.query("...").await?` |
+| Python                                        | Rust                                        |
+| --------------------------------------------- | ------------------------------------------- |
+| `async with ClaudeSDKClient() as client:`     | `client.connect().await?`                   |
+| `await client.query("...")`                   | `client.query("...").await?`                |
 | `async for msg in client.receive_response():` | `while let Some(msg) = stream.next().await` |
-| `await client.interrupt()` | `client.interrupt().await?` |
-| `await client.disconnect()` | `client.disconnect().await?` |
+| `await client.interrupt()`                    | `client.interrupt().await?`                 |
+| `await client.disconnect()`                   | `client.disconnect().await?`                |
 
 ## 🤝 贡献
 

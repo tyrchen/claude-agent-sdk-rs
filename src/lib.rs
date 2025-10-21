@@ -16,7 +16,7 @@
 //! The `query()` function will enable simple one-shot queries:
 //!
 //! ```rust,ignore
-//! use claude_agent_sdk::{query, Message, ContentBlock};
+//! use claude_agent_sdk_rs::{query, Message, ContentBlock};
 //! use futures::StreamExt;
 //!
 //! #[tokio::main]

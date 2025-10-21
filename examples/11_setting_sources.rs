@@ -19,7 +19,9 @@
 //! cargo run --example 11_setting_sources -- project_and_user
 //! cargo run --example 11_setting_sources -- all
 
-use claude_agent_sdk::{ClaudeAgentOptions, ClaudeClient, Message, SettingSource, SystemMessage};
+use claude_agent_sdk_rs::{
+    ClaudeAgentOptions, ClaudeClient, Message, SettingSource, SystemMessage,
+};
 use futures::StreamExt;
 
 #[tokio::main]
