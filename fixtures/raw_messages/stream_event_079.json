@@ -1,0 +1,14 @@
+{
+  "type": "stream_event",
+  "event": {
+    "type": "content_block_delta",
+    "index": 0,
+    "delta": {
+      "type": "text_delta",
+      "text": "-10"
+    }
+  },
+  "session_id": "7ce5b643-713b-4644-afa1-50777e66ab62",
+  "parent_tool_use_id": null,
+  "uuid": "3d3a0563-6bfb-4bfb-9048-6b921f800976"
+}

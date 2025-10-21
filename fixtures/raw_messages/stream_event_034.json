@@ -1,0 +1,14 @@
+{
+  "type": "stream_event",
+  "event": {
+    "type": "content_block_delta",
+    "index": 0,
+    "delta": {
+      "type": "text_delta",
+      "text": ".\n\n**3 (Three)**"
+    }
+  },
+  "session_id": "7ce5b643-713b-4644-afa1-50777e66ab62",
+  "parent_tool_use_id": null,
+  "uuid": "bd9a4d10-53d8-4430-a0cf-a4760348c3b5"
+}

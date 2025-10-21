@@ -130,6 +130,11 @@ impl SubprocessTransport {
         }
 
         // Add system prompt
+        // Note: Python SDK behavior (lines 91-102 of subprocess_cli.py):
+        // - If None: skip
+        // - If string: use --system-prompt
+        // - If preset with append: use --append-system-prompt (NOT --system-prompt-preset)
+        //   This relies on default Claude Code prompt and just appends to it
         if let Some(ref system_prompt) = self.options.system_prompt {
             match system_prompt {
                 crate::types::config::SystemPrompt::Text(text) => {
@@ -137,12 +142,12 @@ impl SubprocessTransport {
                     args.push(text.clone());
                 }
                 crate::types::config::SystemPrompt::Preset(preset) => {
-                    args.push("--system-prompt-preset".to_string());
-                    args.push(preset.preset.clone());
+                    // Only add append if present (uses default Claude Code prompt)
                     if let Some(ref append) = preset.append {
-                        args.push("--system-prompt-append".to_string());
+                        args.push("--append-system-prompt".to_string());
                         args.push(append.clone());
                     }
+                    // Note: preset.preset field is ignored - CLI uses default prompt
                 }
             }
         }

@@ -1,0 +1,9 @@
+{
+  "type": "stream_event",
+  "event": {
+    "type": "message_stop"
+  },
+  "session_id": "7ce5b643-713b-4644-afa1-50777e66ab62",
+  "parent_tool_use_id": null,
+  "uuid": "745853c0-9e22-40dc-aa7c-5130ab5f3a3f"
+}

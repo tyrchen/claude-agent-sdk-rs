@@ -1,0 +1,19 @@
+{
+  "type": "stream_event",
+  "event": {
+    "type": "message_delta",
+    "delta": {
+      "stop_reason": "end_turn",
+      "stop_sequence": null
+    },
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 337,
+      "cache_read_input_tokens": 14422,
+      "output_tokens": 214
+    }
+  },
+  "session_id": "7ce5b643-713b-4644-afa1-50777e66ab62",
+  "parent_tool_use_id": null,
+  "uuid": "9092aba9-dec3-4e09-8424-41524549f957"
+}

@@ -1,0 +1,36 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_01QkBTGzZQVbnhpfufSa6PvB",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_01QeS6S3DzCPaHvRecS7eXK3",
+        "name": "Write",
+        "input": {
+          "file_path": "/Users/tchen/projects/mycode/rust/claude-agent-sdk-rs/tools/output.txt",
+          "content": "test"
+        }
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 2736,
+      "cache_read_input_tokens": 12041,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 2736,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "54916c4f-e836-42ea-955e-20ea452bf855",
+  "uuid": "4a9ca1ea-2031-446b-85d3-5e265fa231cf"
+}

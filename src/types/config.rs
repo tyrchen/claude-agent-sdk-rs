@@ -89,6 +89,9 @@ impl From<&str> for SystemPrompt {
 /// System prompt preset
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemPromptPreset {
+    /// Type field (always "preset")
+    #[serde(rename = "type")]
+    pub type_: String,
     /// Preset name (e.g., "claude_code")
     pub preset: String,
     /// Text to append to the preset
@@ -96,15 +99,37 @@ pub struct SystemPromptPreset {
     pub append: Option<String>,
 }
 
+impl SystemPromptPreset {
+    /// Create a new preset with the given name
+    pub fn new(preset: impl Into<String>) -> Self {
+        Self {
+            type_: "preset".to_string(),
+            preset: preset.into(),
+            append: None,
+        }
+    }
+
+    /// Create a preset with appended text
+    pub fn with_append(preset: impl Into<String>, append: impl Into<String>) -> Self {
+        Self {
+            type_: "preset".to_string(),
+            preset: preset.into(),
+            append: Some(append.into()),
+        }
+    }
+}
+
 /// Permission mode for tool execution
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum PermissionMode {
     /// Default permission mode
+    #[serde(rename = "default")]
     Default,
     /// Accept edits automatically
     AcceptEdits,
     /// Plan mode
+    #[serde(rename = "plan")]
     Plan,
     /// Bypass all permissions
     BypassPermissions,

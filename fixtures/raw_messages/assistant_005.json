@@ -1,0 +1,36 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_01RL24ZqzWbN7Kv6MFmDR9Lz",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_01AxWcMJY3sYPAhP2b6giuZV",
+        "name": "Bash",
+        "input": {
+          "command": "echo \"Hello World\" > test.txt",
+          "description": "Create test.txt with Hello World"
+        }
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 7,
+      "cache_creation_input_tokens": 164,
+      "cache_read_input_tokens": 14783,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 164,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "069d6573-3f24-4d59-a294-eb134774a1b3",
+  "uuid": "041088e8-a5ef-4835-bee2-763e038c70c7"
+}

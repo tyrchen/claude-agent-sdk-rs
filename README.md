@@ -8,7 +8,7 @@
 
 Rust SDK for interacting with Claude Code CLI, enabling programmatic access to Claude's capabilities with **full bidirectional streaming support**.
 
-**Status**: ✅ **Production Ready** - 100% feature parity with Python SDK
+**Status**: ✅ 100% feature parity with Python SDK - Ready for dev use
 
 ## ✨ Features
 
@@ -20,7 +20,7 @@ Rust SDK for interacting with Claude Code CLI, enabling programmatic access to C
 - 🔐 **Permission Management**: Fine-grained control over tool execution
 - 🦀 **Type Safety**: Strongly-typed messages, configs, hooks, and permissions
 - ⚡ **Zero Deadlock**: Lock-free architecture for concurrent read/write
-- 📚 **Comprehensive Examples**: 15+ examples covering all features
+- 📚 **Comprehensive Examples**: 15 complete examples covering all features
 - 🧪 **Well Tested**: Extensive test coverage with unit and integration tests
 
 ## 📦 Installation
@@ -239,7 +239,7 @@ The SDK provides strongly-typed Rust interfaces for all Claude interactions:
 
 ## 📚 Examples
 
-The SDK includes 15+ comprehensive examples demonstrating all features. See [examples/README.md](examples/README.md) for details.
+The SDK includes **15 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
 
 ### Quick Examples
 
@@ -269,13 +269,13 @@ cargo run --example 13_system_prompt        # System prompt configs
 
 ### Example Categories
 
-| Category | Examples | Description |
-|----------|----------|-------------|
-| **Basics** | 01-03 | Simple queries, tool control, monitoring |
-| **Advanced** | 04-07 | Permissions, hooks, streaming, dynamic control |
-| **MCP** | 08 | Custom tools and MCP server integration |
-| **Config** | 09-13 | Agents, settings, prompts, debugging |
-| **Patterns** | 14-15 | Comprehensive streaming and hooks patterns |
+| Category     | Examples | Description                                    |
+| ------------ | -------- | ---------------------------------------------- |
+| **Basics**   | 01-03    | Simple queries, tool control, monitoring       |
+| **Advanced** | 04-07    | Permissions, hooks, streaming, dynamic control |
+| **MCP**      | 08       | Custom tools and MCP server integration        |
+| **Config**   | 09-13    | Agents, settings, prompts, debugging           |
+| **Patterns** | 14-15    | Comprehensive streaming and hooks patterns     |
 
 ## 📖 API Overview
 
@@ -424,14 +424,17 @@ cargo doc --open
 ### Common Issues
 
 **"Claude Code CLI not found"**
-- Install Claude Code CLI: https://docs.claude.com/claude-code
+
+- Install Claude Code CLI: <https://docs.claude.com/claude-code>
 - Ensure `claude` is in your PATH
 
 **"API key not configured"**
+
 - Set `ANTHROPIC_API_KEY` environment variable
 - Or configure via Claude Code CLI settings
 
 **"Permission denied" errors**
+
 - Use `permission_mode: PermissionMode::AcceptEdits` for automated workflows
 - Or implement custom permission callbacks
 
@@ -455,13 +458,13 @@ let options = ClaudeAgentOptions {
 
 The Rust SDK closely mirrors the Python SDK API:
 
-| Python | Rust |
-|--------|------|
-| `async with ClaudeSDKClient() as client:` | `client.connect().await?` |
-| `await client.query("...")` | `client.query("...").await?` |
+| Python                                        | Rust                                        |
+| --------------------------------------------- | ------------------------------------------- |
+| `async with ClaudeSDKClient() as client:`     | `client.connect().await?`                   |
+| `await client.query("...")`                   | `client.query("...").await?`                |
 | `async for msg in client.receive_response():` | `while let Some(msg) = stream.next().await` |
-| `await client.interrupt()` | `client.interrupt().await?` |
-| `await client.disconnect()` | `client.disconnect().await?` |
+| `await client.interrupt()`                    | `client.interrupt().await?`                 |
+| `await client.disconnect()`                   | `client.disconnect().await?`                |
 
 ## 🤝 Contributing
 

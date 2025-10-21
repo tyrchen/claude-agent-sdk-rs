@@ -1,0 +1,31 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_015GxT3Wirwz3tXGrSfWFGhK",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "The result is **392**.\n\n(15 \u00d7 23 = 345, then 345 + 47 = 392)"
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 6,
+      "cache_creation_input_tokens": 119,
+      "cache_read_input_tokens": 14770,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 119,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "64ebba93-4c37-42ab-830f-205cc833e898",
+  "uuid": "71f81771-3958-4b1f-8f8a-dc2c9e138a3d"
+}

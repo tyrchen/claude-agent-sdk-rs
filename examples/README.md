@@ -95,15 +95,30 @@ cargo run --example 13_system_prompt
 
 **14_streaming_mode.rs** - Comprehensive streaming patterns
 ```bash
+# List all available examples
+cargo run --example 14_streaming_mode
+
 # Run all streaming examples
-cargo run --example 14_streaming_mode -- all
+cargo run --example 14_streaming_mode all
 
 # Run specific examples
-cargo run --example 14_streaming_mode -- basic_streaming
-cargo run --example 14_streaming_mode -- multi_turn
-cargo run --example 14_streaming_mode -- with_options
-cargo run --example 14_streaming_mode -- manual_handling
+cargo run --example 14_streaming_mode basic_streaming
+cargo run --example 14_streaming_mode multi_turn_conversation
+cargo run --example 14_streaming_mode with_options
+cargo run --example 14_streaming_mode manual_message_handling
+cargo run --example 14_streaming_mode bash_command
+cargo run --example 14_streaming_mode control_protocol
+cargo run --example 14_streaming_mode error_handling
 ```
+
+Includes 7 comprehensive examples:
+- Basic streaming with receive_response
+- Multi-turn conversations
+- Custom options and tool tracking
+- Manual message handling with custom parsing logic
+- Bash command tracking (ToolUse and ToolResult blocks)
+- Control protocol (server info, interrupt capability)
+- Error handling patterns (timeouts, graceful degradation)
 
 ### Hooks Examples
 

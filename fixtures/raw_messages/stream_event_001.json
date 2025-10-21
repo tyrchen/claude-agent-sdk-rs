@@ -1,0 +1,34 @@
+{
+  "type": "stream_event",
+  "event": {
+    "type": "message_start",
+    "message": {
+      "model": "claude-sonnet-4-5-20250929",
+      "id": "msg_012dkbZdmC3XVBgsSpTBKSEd",
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "I"
+        }
+      ],
+      "stop_reason": null,
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 3,
+        "cache_creation_input_tokens": 337,
+        "cache_read_input_tokens": 14422,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 337,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1,
+        "service_tier": "standard"
+      }
+    }
+  },
+  "session_id": "7ce5b643-713b-4644-afa1-50777e66ab62",
+  "parent_tool_use_id": null,
+  "uuid": "6283cd42-f5a3-46fc-84ad-b355558a4c81"
+}

@@ -1,24 +1,18 @@
 [package]
 name = "claude-agent-sdk"
-version = "0.1.0"
-authors = ["Tao Chen <tao.chen@example.com>"]
+version = "0.1.1"
+authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2021"
 rust-version = "1.70"
 license = "MIT"
 documentation = "https://docs.rs/claude-agent-sdk"
-repository = "https://github.com/taocraft/claude-agent-sdk-rs"
-homepage = "https://github.com/taocraft/claude-agent-sdk-rs"
+repository = "https://github.com/tyrchen/claude-agent-sdk-rs"
+homepage = "https://github.com/tyrchen/claude-agent-sdk-rs"
 description = "Rust SDK for Claude Code CLI with bidirectional streaming, hooks, and custom tools support"
 readme = "README.md"
 categories = ["development-tools", "api-bindings", "asynchronous"]
 keywords = ["claude", "ai", "agent", "anthropic", "llm"]
-exclude = [
-    ".github/",
-    "vendors/",
-    "fixtures/",
-    ".gitignore",
-    ".gitmodules",
-]
+include = ["src/**/*.rs", "Cargo.toml", "LICENSE", "README.md"]
 
 [dependencies]
 # Async runtime
@@ -42,7 +36,6 @@ anyhow = "1.0"
 path-absolutize = "3.1"
 
 # Logging
-log = "0.4"
 tracing = "0.1"
 
 # UUID generation

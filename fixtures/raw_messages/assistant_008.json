@@ -1,0 +1,31 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_012dkbZdmC3XVBgsSpTBKSEd",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'll count from 1 to 5 with brief explanations for each number.\n\n**1 (One)**\nThe first positive integer and the multiplicative identity. It's the foundation of counting and represents a single unit or entity.\n\n**2 (Two)**\nThe smallest and only even prime number. It represents a pair or duality and is fundamental in binary systems.\n\n**3 (Three)**\nThe first odd prime number after 2. It forms the basis of triangles, the simplest polygon, and appears frequently in cultural contexts (e.g., \"third time's a charm\").\n\n**4 (Four)**\nThe first composite number and the smallest square number (2\u00b2). It represents stability in geometry (four sides of a square, four cardinal directions).\n\n**5 (Five)**\nA prime number that's central to our base-10 number system (half of 10). Humans have five fingers on each hand, which likely influenced our decimal counting system."
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 337,
+      "cache_read_input_tokens": 14422,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 337,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "7ce5b643-713b-4644-afa1-50777e66ab62",
+  "uuid": "83b91761-8da4-4d26-bfd6-254f8392009d"
+}

@@ -1,0 +1,36 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_019ACqycYaJpMfVDA9speju6",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_01NiMQYHrC2QBH4GjESNKeWM",
+        "name": "Bash",
+        "input": {
+          "command": "echo $((15 * 23 + 47))",
+          "description": "Calculate 15 * 23 + 47"
+        }
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 14770,
+      "cache_read_input_tokens": 0,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 14770,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "64ebba93-4c37-42ab-830f-205cc833e898",
+  "uuid": "dbbe9533-cb8e-435b-94e2-64d7b62083de"
+}

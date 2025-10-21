@@ -1,0 +1,31 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_01P4M7T5fgsUKqCYtNBRMBT7",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Successfully wrote 'test' to output.txt at `/Users/tchen/projects/mycode/rust/claude-agent-sdk-rs/tools/output.txt`."
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 6,
+      "cache_creation_input_tokens": 151,
+      "cache_read_input_tokens": 14777,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 151,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "54916c4f-e836-42ea-955e-20ea452bf855",
+  "uuid": "1b186a98-21f6-4e24-adfe-bc3b96f4affe"
+}

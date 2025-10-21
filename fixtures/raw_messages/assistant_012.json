@@ -1,0 +1,31 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_01QkBTGzZQVbnhpfufSa6PvB",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'll write 'test' to a file called output.txt."
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 2736,
+      "cache_read_input_tokens": 12041,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 2736,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "54916c4f-e836-42ea-955e-20ea452bf855",
+  "uuid": "348ef50a-cefe-48fd-9d40-eba0cb212272"
+}

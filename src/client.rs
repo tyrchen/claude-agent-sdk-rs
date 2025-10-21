@@ -439,13 +439,38 @@ impl ClaudeClient {
         query_guard.set_model(model).await
     }
 
-    /// Get server initialization info
+    /// Get server initialization info including available commands and output styles
     ///
-    /// Returns information about the Claude Code CLI session.
+    /// Returns initialization information from the Claude Code server including:
+    /// - Available commands (slash commands, system commands, etc.)
+    /// - Current and available output styles
+    /// - Server capabilities
+    ///
+    /// This is analogous to Python's `client.get_server_info()`.
+    ///
+    /// # Returns
+    ///
+    /// Dictionary with server info, or None if not connected
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk::{ClaudeClient, ClaudeAgentOptions};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// if let Some(info) = client.get_server_info().await {
+    ///     println!("Commands available: {}", info.get("commands").map(|c| c.as_array().map(|a| a.len()).unwrap_or(0)).unwrap_or(0));
+    ///     println!("Output style: {:?}", info.get("output_style"));
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_server_info(&self) -> Option<serde_json::Value> {
-        self.query.as_ref()?;
-        // TODO: Store and return initialization result
-        None
+        let query = self.query.as_ref()?;
+        let query_guard = query.lock().await;
+        query_guard.get_initialization_result().await
     }
 
     /// Disconnect from Claude (analogous to Python's __aexit__)

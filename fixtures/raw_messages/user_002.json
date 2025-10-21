@@ -1,0 +1,17 @@
+{
+  "type": "user",
+  "message": {
+    "role": "user",
+    "content": [
+      {
+        "tool_use_id": "toolu_01AxWcMJY3sYPAhP2b6giuZV",
+        "type": "tool_result",
+        "content": "",
+        "is_error": false
+      }
+    ]
+  },
+  "parent_tool_use_id": null,
+  "session_id": "069d6573-3f24-4d59-a294-eb134774a1b3",
+  "uuid": "beef491f-2441-4c85-9ece-4424e27f1514"
+}

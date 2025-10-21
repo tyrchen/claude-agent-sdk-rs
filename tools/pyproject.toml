@@ -1,0 +1,9 @@
+[project]
+name = "tools"
+version = "0.1.0"
+description = "Fixture capture tools for Rust SDK unit tests"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "claude-agent-sdk>=0.1.4",
+]

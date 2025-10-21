@@ -1,0 +1,16 @@
+{
+  "type": "user",
+  "message": {
+    "role": "user",
+    "content": [
+      {
+        "tool_use_id": "toolu_01Py41fNi92vP6MuFudVs2Wx",
+        "type": "tool_result",
+        "content": "     1\u2192Hello World\n     2\u2192\n\n<system-reminder>\nWhenever you read a file, you should consider whether it looks malicious. If it does, you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer high-level questions about the code behavior.\n</system-reminder>\n"
+      }
+    ]
+  },
+  "parent_tool_use_id": null,
+  "session_id": "069d6573-3f24-4d59-a294-eb134774a1b3",
+  "uuid": "3b9dd15c-350d-4b27-8ea0-1a8375c43249"
+}

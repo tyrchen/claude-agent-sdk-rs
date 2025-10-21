@@ -1,0 +1,47 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 5061,
+  "duration_api_ms": 7164,
+  "num_turns": 4,
+  "result": "Successfully wrote 'test' to output.txt at `/Users/tchen/projects/mycode/rust/claude-agent-sdk-rs/tools/output.txt`.",
+  "session_id": "54916c4f-e836-42ea-955e-20ea452bf855",
+  "total_cost_usd": 0.022645649999999996,
+  "usage": {
+    "input_tokens": 9,
+    "cache_creation_input_tokens": 2887,
+    "cache_read_input_tokens": 26818,
+    "output_tokens": 152,
+    "server_tool_use": {
+      "web_search_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 0,
+      "ephemeral_5m_input_tokens": 2887
+    }
+  },
+  "modelUsage": {
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 632,
+      "outputTokens": 167,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 0,
+      "webSearchRequests": 0,
+      "costUSD": 0.001467,
+      "contextWindow": 200000
+    },
+    "claude-sonnet-4-5-20250929": {
+      "inputTokens": 9,
+      "outputTokens": 152,
+      "cacheReadInputTokens": 26818,
+      "cacheCreationInputTokens": 2887,
+      "webSearchRequests": 0,
+      "costUSD": 0.02117865,
+      "contextWindow": 200000
+    }
+  },
+  "permission_denials": [],
+  "uuid": "76dc7beb-3b96-47a6-a5b8-9f061787e95f"
+}

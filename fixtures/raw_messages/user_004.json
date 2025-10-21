@@ -1,0 +1,17 @@
+{
+  "type": "user",
+  "message": {
+    "role": "user",
+    "content": [
+      {
+        "tool_use_id": "toolu_01NMbXVP5s7wrXboD5RdMKEW",
+        "type": "tool_result",
+        "content": "Hook test successful",
+        "is_error": false
+      }
+    ]
+  },
+  "parent_tool_use_id": null,
+  "session_id": "9ec6e3e3-5043-4b9a-810e-655daf9725a8",
+  "uuid": "a89a3c0b-d496-4c3f-a808-7cf7ce39fc38"
+}

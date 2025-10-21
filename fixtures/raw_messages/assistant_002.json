@@ -1,0 +1,31 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_013T1NrdMFBq1QDCXShS3tcV",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'll create a file called test.txt with the text 'Hello World' and then read it back to verify."
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 2742,
+      "cache_read_input_tokens": 12041,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 2742,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "069d6573-3f24-4d59-a294-eb134774a1b3",
+  "uuid": "6856c79f-c41c-4244-a093-8c94f7c8c455"
+}

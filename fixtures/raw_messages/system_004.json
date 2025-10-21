@@ -1,0 +1,49 @@
+{
+  "type": "system",
+  "subtype": "init",
+  "cwd": "/Users/tchen/projects/mycode/rust/claude-agent-sdk-rs/tools",
+  "session_id": "9ec6e3e3-5043-4b9a-810e-655daf9725a8",
+  "tools": [
+    "Task",
+    "Bash",
+    "Glob",
+    "Grep",
+    "ExitPlanMode",
+    "Read",
+    "Edit",
+    "Write",
+    "NotebookEdit",
+    "WebFetch",
+    "TodoWrite",
+    "WebSearch",
+    "BashOutput",
+    "KillShell",
+    "Skill",
+    "SlashCommand"
+  ],
+  "mcp_servers": [],
+  "model": "claude-sonnet-4-5-20250929",
+  "permissionMode": "bypassPermissions",
+  "slash_commands": [
+    "compact",
+    "context",
+    "cost",
+    "init",
+    "output-style:new",
+    "pr-comments",
+    "release-notes",
+    "todos",
+    "review",
+    "security-review"
+  ],
+  "apiKeySource": "none",
+  "claude_code_version": "2.0.20",
+  "output_style": "default",
+  "agents": [
+    "general-purpose",
+    "statusline-setup",
+    "output-style-setup",
+    "Explore"
+  ],
+  "uuid": "8aa0c43a-d71c-466a-b30f-32f6f1c59136"
+}

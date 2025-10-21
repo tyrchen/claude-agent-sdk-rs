@@ -1,0 +1,31 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_01T55b2GhUxgEWjuqgXJ8aCB",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Why do programmers prefer dark mode? Because light attracts bugs."
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 333,
+      "cache_read_input_tokens": 14422,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 333,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 1,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "f65e3388-bd63-42d2-afcd-50f9da4b86b5",
+  "uuid": "4e2ac6f4-cf46-4ac6-b87f-63e1a8d72e5a"
+}

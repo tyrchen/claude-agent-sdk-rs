@@ -1,0 +1,36 @@
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-sonnet-4-5-20250929",
+    "id": "msg_01TWnZetTKEJA68DM3DMqCix",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "toolu_01NMbXVP5s7wrXboD5RdMKEW",
+        "name": "Bash",
+        "input": {
+          "command": "echo 'Hook test successful'",
+          "description": "Echo test message"
+        }
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 3,
+      "cache_creation_input_tokens": 2726,
+      "cache_read_input_tokens": 12041,
+      "cache_creation": {
+        "ephemeral_5m_input_tokens": 2726,
+        "ephemeral_1h_input_tokens": 0
+      },
+      "output_tokens": 86,
+      "service_tier": "standard"
+    }
+  },
+  "parent_tool_use_id": null,
+  "session_id": "9ec6e3e3-5043-4b9a-810e-655daf9725a8",
+  "uuid": "3d9a2e42-f772-440c-9a6d-a90acb0f38b4"
+}

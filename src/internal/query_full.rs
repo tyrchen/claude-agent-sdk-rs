@@ -64,6 +64,8 @@ pub struct QueryFull {
     pub(crate) message_rx: Arc<Mutex<mpsc::UnboundedReceiver<serde_json::Value>>>,
     // Direct access to stdin for writes (bypasses transport lock)
     pub(crate) stdin: Option<Arc<Mutex<Option<tokio::process::ChildStdin>>>>,
+    // Store initialization result for get_server_info()
+    initialization_result: Arc<Mutex<Option<serde_json::Value>>>,
 }
 
 impl QueryFull {
@@ -81,6 +83,7 @@ impl QueryFull {
             message_tx,
             message_rx: Arc::new(Mutex::new(message_rx)),
             stdin: None,
+            initialization_result: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -137,7 +140,12 @@ impl QueryFull {
             "hooks": if hooks_config.is_empty() { json!(null) } else { json!(hooks_config) }
         });
 
-        self.send_control_request(request).await
+        let response = self.send_control_request(request).await?;
+
+        // Store initialization result for get_server_info()
+        *self.initialization_result.lock().await = Some(response.clone());
+
+        Ok(response)
     }
 
     /// Start reading messages in background
@@ -429,9 +437,9 @@ impl QueryFull {
     ) -> Result<()> {
         let mode_str = match mode {
             crate::types::config::PermissionMode::Default => "default",
-            crate::types::config::PermissionMode::AcceptEdits => "accept-edits",
+            crate::types::config::PermissionMode::AcceptEdits => "acceptEdits",
             crate::types::config::PermissionMode::Plan => "plan",
-            crate::types::config::PermissionMode::BypassPermissions => "bypass-permissions",
+            crate::types::config::PermissionMode::BypassPermissions => "bypassPermissions",
         };
 
         let request = json!({
@@ -452,6 +460,14 @@ impl QueryFull {
 
         self.send_control_request(request).await?;
         Ok(())
+    }
+
+    /// Get server initialization info
+    ///
+    /// Returns the initialization result that was obtained during connect().
+    /// This includes information about available commands, output styles, and server capabilities.
+    pub async fn get_initialization_result(&self) -> Option<serde_json::Value> {
+        self.initialization_result.lock().await.clone()
     }
 
     /// Handle SDK MCP request by routing to the appropriate server
