@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.2.1](https://github.com/compare/v0.2.0..v0.2.1) - 2025-10-26
+
+### Features
+
+- add session management interface - ([3ff20d2](https://github.com/commit/3ff20d211fa30c607ddbdd0733da73a0f7027d4f)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([2663900](https://github.com/commit/26639008db1e4153e8950c88ea14cab9513d5940)) - Tyr Chen
+
+---
 ## [0.2.0] - 2025-10-26
 
 ### Features
