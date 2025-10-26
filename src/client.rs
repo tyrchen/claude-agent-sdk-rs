@@ -5,8 +5,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
+use tracing::{debug, instrument};
 
-use crate::errors::{ClaudeError, Result};
+use crate::errors::{ClaudeError, Result, TransportError};
 use crate::internal::message_parser::MessageParser;
 use crate::internal::query_full::QueryFull;
 use crate::internal::transport::subprocess::QueryPrompt;
@@ -89,10 +90,14 @@ impl ClaudeClient {
     /// - Claude CLI cannot be found or started
     /// - The initialization handshake fails
     /// - Hook registration fails
+    #[instrument(skip(self))]
     pub async fn connect(&mut self) -> Result<()> {
         if self.connected {
+            debug!("Already connected, skipping");
             return Ok(());
         }
+
+        debug!("Initiating connection to Claude CLI");
 
         // Create transport in streaming mode (no initial prompt)
         let prompt = QueryPrompt::Streaming;
@@ -105,7 +110,7 @@ impl ClaudeClient {
         let stdin = Arc::clone(&transport.stdin);
 
         // Create Query with hooks
-        let mut query = QueryFull::new(Box::new(transport));
+        let mut query = QueryFull::new(Box::new(transport), self.options.control_request_timeout);
         query.set_stdin(stdin);
 
         // Extract SDK MCP servers from options
@@ -147,14 +152,17 @@ impl ClaudeClient {
         // Start reading messages in background FIRST
         // This must happen before initialize() because initialize()
         // sends a control request and waits for response
+        debug!("Starting message reader in background");
         query.start().await?;
 
         // Initialize with hooks (sends control request)
+        debug!("Initializing Claude session with hooks");
         query.initialize(hooks).await?;
 
         self.query = Some(Arc::new(Mutex::new(query)));
         self.connected = true;
 
+        debug!("Connection established successfully");
         Ok(())
     }
 
@@ -183,6 +191,7 @@ impl ClaudeClient {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self, prompt), fields(prompt_len))]
     pub async fn query(&mut self, prompt: impl Into<String>) -> Result<()> {
         self.query_with_session(prompt, "default").await
     }
@@ -215,6 +224,7 @@ impl ClaudeClient {
     /// # Ok(())
     /// # }
     /// ```
+    #[instrument(skip(self, prompt, session_id), fields(prompt_len, session_id))]
     pub async fn query_with_session(
         &mut self,
         prompt: impl Into<String>,
@@ -227,6 +237,10 @@ impl ClaudeClient {
         let prompt_str = prompt.into();
         let session_id_str = session_id.into();
 
+        tracing::Span::current().record("prompt_len", prompt_str.len());
+        tracing::Span::current().record("session_id", session_id_str.as_str());
+        debug!(prompt_len = prompt_str.len(), session_id = %session_id_str, "Sending query to Claude");
+
         // Format as JSON message for stream-json input format
         let user_message = serde_json::json!({
             "type": "user",
@@ -238,7 +252,7 @@ impl ClaudeClient {
         });
 
         let message_str = serde_json::to_string(&user_message).map_err(|e| {
-            ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
+            ClaudeError::InvalidConfig(format!("Failed to serialize user message: {}", e))
         })?;
 
         // Write directly to stdin (bypasses transport lock)
@@ -252,21 +266,23 @@ impl ClaudeClient {
                 stdin_stream
                     .write_all(message_str.as_bytes())
                     .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
+                    .map_err(TransportError::StdinWrite)?;
+                stdin_stream
+                    .write_all(b"\n")
+                    .await
+                    .map_err(TransportError::StdinWrite)?;
                 stdin_stream
                     .flush()
                     .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
+                    .map_err(TransportError::StdinWrite)?;
             } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
+                return Err(TransportError::StdinUnavailable.into());
             }
         } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
+            return Err(TransportError::StdinUnavailable.into());
         }
 
+        debug!("Query sent successfully");
         Ok(())
     }
 
@@ -550,6 +566,156 @@ impl ClaudeClient {
         prompt: impl Into<String>,
     ) -> Result<()> {
         self.query_with_session(prompt, session_id).await
+    }
+
+    /// Send a query and collect all text from assistant messages
+    ///
+    /// This is a convenience method that sends a query and collects all text
+    /// content from the assistant's response into a single string.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt` - The user prompt to send
+    ///
+    /// # Returns
+    ///
+    /// A string containing all text from the assistant's response
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending the query fails or message parsing fails
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// let text = client.query_for_text("What is Rust?").await?;
+    /// println!("Response: {}", text);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn query_for_text(&mut self, prompt: impl Into<String>) -> Result<String> {
+        use crate::types::messages::ContentBlock;
+        use futures::StreamExt;
+
+        self.query(prompt).await?;
+
+        let mut text = String::new();
+        let mut stream = self.receive_response();
+
+        while let Some(message) = stream.next().await {
+            if let Message::Assistant(msg) = message? {
+                for block in msg.message.content {
+                    if let ContentBlock::Text(t) = block {
+                        text.push_str(&t.text);
+                    }
+                }
+            }
+        }
+
+        Ok(text)
+    }
+
+    /// Send a query and collect all messages until result
+    ///
+    /// This is a convenience method that sends a query and collects all messages
+    /// into a vector until a ResultMessage is received.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt` - The user prompt to send
+    ///
+    /// # Returns
+    ///
+    /// A vector of all messages received in the response
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending the query fails or message parsing fails
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// let messages = client.query_and_collect("What is 2 + 2?").await?;
+    /// println!("Received {} messages", messages.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn query_and_collect(&mut self, prompt: impl Into<String>) -> Result<Vec<Message>> {
+        use futures::StreamExt;
+
+        self.query(prompt).await?;
+
+        let mut messages = Vec::new();
+        let mut stream = self.receive_response();
+
+        while let Some(message) = stream.next().await {
+            messages.push(message?);
+        }
+
+        Ok(messages)
+    }
+
+    /// Send a query and get the result metadata
+    ///
+    /// This is a convenience method that sends a query and returns the
+    /// ResultMessage containing metadata like cost, duration, etc.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt` - The user prompt to send
+    ///
+    /// # Returns
+    ///
+    /// The ResultMessage containing response metadata
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if sending the query fails, message parsing fails,
+    /// or no result message is received
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// let result = client.query_for_result("What is Rust?").await?;
+    /// if let Some(usage) = result.usage {
+    ///     println!("Usage: {:?}", usage);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn query_for_result(
+        &mut self,
+        prompt: impl Into<String>,
+    ) -> Result<crate::types::messages::ResultMessage> {
+        use futures::StreamExt;
+
+        self.query(prompt).await?;
+
+        let mut stream = self.receive_response();
+        while let Some(message) = stream.next().await {
+            if let Message::Result(result) = message? {
+                return Ok(result);
+            }
+        }
+
+        Err(ClaudeError::InvalidConfig(
+            "No result message received".to_string(),
+        ))
     }
 
     /// Disconnect from Claude (analogous to Python's __aexit__)

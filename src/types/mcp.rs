@@ -158,9 +158,9 @@ struct DefaultSdkMcpServer {
 impl SdkMcpServer for DefaultSdkMcpServer {
     async fn handle_message(&self, message: serde_json::Value) -> Result<serde_json::Value> {
         // Parse the MCP message
-        let method = message["method"]
-            .as_str()
-            .ok_or_else(|| crate::errors::ClaudeError::Transport("Missing method".to_string()))?;
+        let method = message["method"].as_str().ok_or_else(|| {
+            crate::errors::ClaudeError::InvalidConfig("Missing method in MCP message".to_string())
+        })?;
 
         match method {
             "initialize" => {
@@ -198,12 +198,17 @@ impl SdkMcpServer for DefaultSdkMcpServer {
                 // Execute a tool
                 let params = &message["params"];
                 let tool_name = params["name"].as_str().ok_or_else(|| {
-                    crate::errors::ClaudeError::Transport("Missing tool name".to_string())
+                    crate::errors::ClaudeError::InvalidConfig(
+                        "Missing tool name in MCP tool call".to_string(),
+                    )
                 })?;
                 let arguments = params["arguments"].clone();
 
                 let tool = self.tools.get(tool_name).ok_or_else(|| {
-                    crate::errors::ClaudeError::Transport(format!("Tool not found: {}", tool_name))
+                    crate::errors::ClaudeError::InvalidConfig(format!(
+                        "Tool not found: {}",
+                        tool_name
+                    ))
                 })?;
 
                 let result = tool.handler.handle(arguments).await?;
@@ -213,8 +218,8 @@ impl SdkMcpServer for DefaultSdkMcpServer {
                     "isError": result.is_error
                 }))
             }
-            _ => Err(crate::errors::ClaudeError::Transport(format!(
-                "Unknown method: {}",
+            _ => Err(crate::errors::ClaudeError::InvalidConfig(format!(
+                "Unknown MCP method: {}",
                 method
             ))),
         }

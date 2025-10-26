@@ -5,12 +5,14 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use crate::errors::{ClaudeError, Result};
+use crate::errors::{ClaudeError, ControlProtocolError, Result, TransportError};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
 use crate::types::mcp::McpSdkServerConfig;
+use tracing::{debug, instrument};
 
 use super::transport::Transport;
 
@@ -66,11 +68,13 @@ pub struct QueryFull {
     pub(crate) stdin: Option<Arc<Mutex<Option<tokio::process::ChildStdin>>>>,
     // Store initialization result for get_server_info()
     initialization_result: Arc<Mutex<Option<serde_json::Value>>>,
+    // Timeout for control requests
+    control_request_timeout: Duration,
 }
 
 impl QueryFull {
     /// Create a new Query
-    pub fn new(transport: Box<dyn Transport>) -> Self {
+    pub fn new(transport: Box<dyn Transport>, control_request_timeout: Duration) -> Self {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
 
         Self {
@@ -84,6 +88,7 @@ impl QueryFull {
             message_rx: Arc::new(Mutex::new(message_rx)),
             stdin: None,
             initialization_result: Arc::new(Mutex::new(None)),
+            control_request_timeout,
         }
     }
 
@@ -222,7 +227,7 @@ impl QueryFull {
         // Wait for background task to be ready before returning
         ready_rx
             .await
-            .map_err(|_| ClaudeError::Transport("Background task failed to start".to_string()))?;
+            .map_err(|_| TransportError::ConnectionClosed)?;
 
         Ok(())
     }
@@ -240,7 +245,9 @@ impl QueryFull {
         let subtype = request_data
             .get("subtype")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| ClaudeError::ControlProtocol("Missing subtype".to_string()))?;
+            .ok_or_else(|| ControlProtocolError::InvalidRequest {
+                field: "subtype".to_string(),
+            })?;
 
         let response_data: serde_json::Value = match subtype {
             "hook_callback" => {
@@ -248,22 +255,21 @@ impl QueryFull {
                 let callback_id = request_data
                     .get("callback_id")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        ClaudeError::ControlProtocol("Missing callback_id".to_string())
+                    .ok_or_else(|| ControlProtocolError::InvalidRequest {
+                        field: "callback_id".to_string(),
                     })?;
 
                 let callbacks = hook_callbacks.lock().await;
                 let callback = callbacks.get(callback_id).ok_or_else(|| {
-                    ClaudeError::ControlProtocol(format!(
-                        "Hook callback not found: {}",
-                        callback_id
-                    ))
+                    ControlProtocolError::HookNotFound {
+                        callback_id: callback_id.to_string(),
+                    }
                 })?;
 
                 // Parse hook input
                 let input_json = request_data.get("input").cloned().unwrap_or(json!({}));
                 let hook_input: HookInput = serde_json::from_value(input_json).map_err(|e| {
-                    ClaudeError::ControlProtocol(format!("Failed to parse hook input: {}", e))
+                    ClaudeError::InvalidConfig(format!("Failed to parse hook input: {}", e))
                 })?;
 
                 let tool_use_id = request_data
@@ -277,7 +283,7 @@ impl QueryFull {
 
                 // Convert to JSON
                 serde_json::to_value(&hook_output).map_err(|e| {
-                    ClaudeError::ControlProtocol(format!("Failed to serialize hook output: {}", e))
+                    ClaudeError::InvalidConfig(format!("Failed to serialize hook output: {}", e))
                 })?
             }
             "mcp_message" => {
@@ -285,14 +291,14 @@ impl QueryFull {
                 let server_name = request_data
                     .get("server_name")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        ClaudeError::ControlProtocol(
-                            "Missing server_name for mcp_message".to_string(),
-                        )
+                    .ok_or_else(|| ControlProtocolError::InvalidRequest {
+                        field: "server_name".to_string(),
                     })?;
 
                 let mcp_message = request_data.get("message").ok_or_else(|| {
-                    ClaudeError::ControlProtocol("Missing message for mcp_message".to_string())
+                    ControlProtocolError::InvalidRequest {
+                        field: "message".to_string(),
+                    }
                 })?;
 
                 let mcp_response =
@@ -302,10 +308,10 @@ impl QueryFull {
                 json!({"mcp_response": mcp_response})
             }
             _ => {
-                return Err(ClaudeError::ControlProtocol(format!(
-                    "Unsupported control request subtype: {}",
-                    subtype
-                )));
+                return Err(ControlProtocolError::UnknownSubtype {
+                    subtype: subtype.to_string(),
+                }
+                .into());
             }
         };
 
@@ -319,8 +325,9 @@ impl QueryFull {
             }
         });
 
-        let response_str = serde_json::to_string(&response)
-            .map_err(|e| ClaudeError::Transport(format!("Failed to serialize response: {}", e)))?;
+        let response_str = serde_json::to_string(&response).map_err(|e| {
+            ClaudeError::InvalidConfig(format!("Failed to serialize response: {}", e))
+        })?;
 
         // Write directly to stdin (bypasses transport lock)
         if let Some(ref stdin_arc) = stdin {
@@ -330,33 +337,38 @@ impl QueryFull {
                 stdin_stream
                     .write_all(response_str.as_bytes())
                     .await
-                    .map_err(|e| {
-                        ClaudeError::Transport(format!("Failed to write control response: {}", e))
-                    })?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
+                    .map_err(TransportError::StdinWrite)?;
+                stdin_stream
+                    .write_all(b"\n")
+                    .await
+                    .map_err(TransportError::StdinWrite)?;
                 stdin_stream
                     .flush()
                     .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
+                    .map_err(TransportError::StdinWrite)?;
             } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
+                return Err(TransportError::StdinUnavailable.into());
             }
         } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
+            return Err(TransportError::StdinUnavailable.into());
         }
 
         Ok(())
     }
 
     /// Send control request to CLI
+    #[instrument(skip(self, request), fields(request_id))]
     async fn send_control_request(&self, request: serde_json::Value) -> Result<serde_json::Value> {
+        let start = std::time::Instant::now();
+
         let request_id = format!(
             "req_{}_{}",
             self.request_counter.fetch_add(1, Ordering::SeqCst),
             uuid::Uuid::new_v4().simple()
         );
+
+        tracing::Span::current().record("request_id", request_id.as_str());
+        debug!(request_id = %request_id, "Sending control request");
 
         // Create oneshot channel for response
         let (tx, rx) = oneshot::channel();
@@ -372,8 +384,9 @@ impl QueryFull {
             "request": request
         });
 
-        let request_str = serde_json::to_string(&control_request)
-            .map_err(|e| ClaudeError::Transport(format!("Failed to serialize request: {}", e)))?;
+        let request_str = serde_json::to_string(&control_request).map_err(|e| {
+            ClaudeError::InvalidConfig(format!("Failed to serialize request: {}", e))
+        })?;
 
         // Write directly to stdin (bypasses transport lock held by background reader)
         if let Some(ref stdin) = self.stdin {
@@ -382,27 +395,35 @@ impl QueryFull {
                 stdin_stream
                     .write_all(request_str.as_bytes())
                     .await
-                    .map_err(|e| {
-                        ClaudeError::Transport(format!("Failed to write control request: {}", e))
-                    })?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
+                    .map_err(TransportError::StdinWrite)?;
+                stdin_stream
+                    .write_all(b"\n")
+                    .await
+                    .map_err(TransportError::StdinWrite)?;
                 stdin_stream
                     .flush()
                     .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
+                    .map_err(TransportError::StdinWrite)?;
             } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
+                return Err(TransportError::StdinUnavailable.into());
             }
         } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
+            return Err(TransportError::StdinUnavailable.into());
         }
 
-        // Wait for response
-        let response = rx.await.map_err(|_| {
-            ClaudeError::ControlProtocol("Control request response channel closed".to_string())
-        })?;
+        // Wait for response with timeout
+        let response = tokio::time::timeout(self.control_request_timeout, rx)
+            .await
+            .map_err(|_| ControlProtocolError::Timeout {
+                timeout_ms: self.control_request_timeout.as_millis() as u64,
+            })?
+            .map_err(|_| TransportError::ConnectionClosed)?;
+
+        let duration = start.elapsed();
+        debug!(
+            duration_ms = duration.as_millis(),
+            "Control request completed"
+        );
 
         Ok(response)
     }
@@ -477,15 +498,18 @@ impl QueryFull {
         message: serde_json::Value,
     ) -> Result<serde_json::Value> {
         let servers = sdk_mcp_servers.lock().await;
-        let server_config = servers.get(server_name).ok_or_else(|| {
-            ClaudeError::ControlProtocol(format!("SDK MCP server not found: {}", server_name))
-        })?;
+        let server_config =
+            servers
+                .get(server_name)
+                .ok_or_else(|| ControlProtocolError::McpServerNotFound {
+                    server_name: server_name.to_string(),
+                })?;
 
         // Call the server's handle_message method
         server_config
             .instance
             .handle_message(message)
             .await
-            .map_err(|e| ClaudeError::ControlProtocol(format!("MCP server error: {}", e)))
+            .map_err(|e| ClaudeError::InvalidConfig(format!("MCP server error: {}", e)))
     }
 }
