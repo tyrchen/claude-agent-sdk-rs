@@ -6,16 +6,15 @@
 //! 3. Can print tool name and arguments
 //! 4. Can allow or deny tool execution
 //!
-//! This matches the Python SDK implementation exactly.
+//! This example showcases the new user-friendly Hooks API.
+
+use std::path::Path;
 
 use claude_agent_sdk_rs::{
-    ClaudeAgentOptions, ClaudeClient, ContentBlock, HookContext, HookEvent, HookInput,
-    HookJsonOutput, HookMatcher, HookSpecificOutput, Message, PreToolUseHookSpecificOutput,
-    SyncHookJsonOutput,
+    ClaudeAgentOptions, ClaudeClient, ContentBlock, HookContext, HookInput, HookJsonOutput,
+    HookSpecificOutput, Hooks, Message, PreToolUseHookSpecificOutput, SyncHookJsonOutput,
 };
 use futures::StreamExt;
-use std::collections::HashMap;
-use std::sync::Arc;
 
 /// PreToolUse hook callback that prints tool information
 async fn print_tool_info(
@@ -110,41 +109,25 @@ async fn block_dangerous_bash(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    println!("=== Example 5: PreToolUse Hooks with Real Callbacks ===\n");
+    println!("=== Example 5: PreToolUse Hooks with New User-Friendly API ===\n");
 
     std::fs::create_dir_all("./fixtures")?;
 
-    // Configure hooks using ClaudeAgentOptions
-    let mut hooks: HashMap<HookEvent, Vec<HookMatcher>> = HashMap::new();
+    // Configure hooks using the new Hooks builder API
+    let mut hooks = Hooks::new();
 
-    // Add PreToolUse hook that prints info for all tools
-    hooks.insert(
-        HookEvent::PreToolUse,
-        vec![
-            // First hook: print info for all tools
-            HookMatcher {
-                matcher: None, // Match all tools
-                hooks: vec![Arc::new(|input, tool_use_id, context| {
-                    Box::pin(print_tool_info(input, tool_use_id, context))
-                })],
-            },
-            // Second hook: block dangerous bash commands
-            HookMatcher {
-                matcher: Some("Bash".to_string()), // Only match Bash tool
-                hooks: vec![Arc::new(|input, tool_use_id, context| {
-                    Box::pin(block_dangerous_bash(input, tool_use_id, context))
-                })],
-            },
-        ],
-    );
+    // Add PreToolUse hook that prints info for all tools (no matcher)
+    hooks.add_pre_tool_use(print_tool_info);
 
-    let options = ClaudeAgentOptions {
-        allowed_tools: vec!["Write".to_string(), "Bash".to_string()],
-        permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
-        max_turns: Some(5),
-        hooks: Some(hooks),
-        ..Default::default()
-    };
+    // Add PreToolUse hook that blocks dangerous bash commands (only for Bash tool)
+    hooks.add_pre_tool_use_with_matcher("Bash", block_dangerous_bash);
+
+    let options = ClaudeAgentOptions::builder()
+        .allowed_tools(vec!["Write".to_string(), "Bash".to_string()])
+        .permission_mode(claude_agent_sdk_rs::PermissionMode::AcceptEdits)
+        .cwd(Path::new("/tmp/todo"))
+        .hooks(hooks.build())
+        .build();
 
     println!("Creating ClaudeClient with PreToolUse hooks...\n");
 
@@ -191,10 +174,16 @@ async fn main() -> anyhow::Result<()> {
     println!("\n========================================");
     println!("\n✅ Hook example completed!");
     println!("\nKey observations:");
+    println!("- Used new Hooks::new() API for easy hook registration");
     println!("- PreToolUse hooks were called BEFORE each tool execution");
     println!("- Hooks received tool name and full input parameters");
     println!("- Hooks can allow or deny tool execution");
     println!("- Multiple hooks can be chained (print_info + block_dangerous)");
+    println!("\nNew API benefits:");
+    println!("- No need to manually create HashMap and Arc wrappers");
+    println!("- Two methods: add_pre_tool_use() for all tools");
+    println!("- add_pre_tool_use_with_matcher(\"ToolName\") for specific tools");
+    println!("- Methods auto-generated using macros for all hook types");
 
     // Clean disconnect
     println!("\nDisconnecting...");

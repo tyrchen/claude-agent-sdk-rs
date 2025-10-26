@@ -10,6 +10,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
+use tracing::warn;
 
 use crate::errors::{
     ClaudeError, CliNotFoundError, ConnectionError, JsonDecodeError, ProcessError, Result,
@@ -237,12 +238,14 @@ impl SubprocessTransport {
         let version = version_output
             .lines()
             .next()
-            .and_then(|line| line.split_whitespace().last())
-            .unwrap_or("");
+            .and_then(|line| line.split_whitespace().next())
+            .unwrap_or("")
+            .trim();
 
         if !check_version(version) {
-            tracing::warn!(
-                "Claude Code CLI version {} is below minimum required version {}. Some features may not work correctly.",
+            warn!(
+                "Claude Code CLI ({}) version {} is below minimum required version {}. Some features may not work correctly.",
+                self.cli_path.display(),
                 version,
                 MIN_CLI_VERSION
             );

@@ -17,16 +17,15 @@ async fn main() -> anyhow::Result<()> {
     // Create output directory
     std::fs::create_dir_all("./fixtures")?;
 
-    // Configure options to allow Write tool
-    let options = ClaudeAgentOptions {
-        allowed_tools: vec!["Write".to_string()],
-        permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
-        max_turns: Some(5),
-        stderr_callback: Some(std::sync::Arc::new(|msg| {
+    // Configure options to allow Write tool using the builder pattern
+    let options = ClaudeAgentOptions::builder()
+        .allowed_tools(vec!["Write".to_string()])
+        .permission_mode(claude_agent_sdk_rs::PermissionMode::AcceptEdits)
+        .max_turns(5)
+        .stderr_callback(std::sync::Arc::new(|msg| {
             eprintln!("STDERR: {}", msg);
-        })),
-        ..Default::default()
-    };
+        }))
+        .build();
 
     println!("Asking Claude to write a Python hello world script...\n");
 

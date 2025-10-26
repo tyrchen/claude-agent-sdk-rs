@@ -30,22 +30,22 @@ async fn code_reviewer_example() -> anyhow::Result<()> {
     let mut agents = HashMap::new();
     agents.insert(
         "code-reviewer".to_string(),
-        AgentDefinition {
-            description: "Reviews code for best practices and potential issues".to_string(),
-            prompt: "You are a code reviewer. Analyze code for bugs, performance issues, \
-                     security vulnerabilities, and adherence to best practices. \
-                     Provide constructive feedback."
-                .to_string(),
-            tools: Some(vec!["Read".to_string(), "Grep".to_string()]),
-            model: Some(AgentModel::Sonnet),
-        },
+        AgentDefinition::builder()
+            .description("Reviews code for best practices and potential issues")
+            .prompt(
+                "You are a code reviewer. Analyze code for bugs, performance issues, \
+                 security vulnerabilities, and adherence to best practices. \
+                 Provide constructive feedback.",
+            )
+            .tools(vec!["Read".to_string(), "Grep".to_string()])
+            .model(AgentModel::Sonnet)
+            .build(),
     );
 
-    let options = ClaudeAgentOptions {
-        agents: Some(agents),
-        max_turns: Some(5),
-        ..Default::default()
-    };
+    let options = ClaudeAgentOptions::builder()
+        .agents(agents)
+        .max_turns(5)
+        .build();
 
     let messages = query(
         "Use the code-reviewer agent to review the code in src/lib.rs",
@@ -65,25 +65,25 @@ async fn documentation_writer_example() -> anyhow::Result<()> {
     let mut agents = HashMap::new();
     agents.insert(
         "doc-writer".to_string(),
-        AgentDefinition {
-            description: "Writes comprehensive documentation".to_string(),
-            prompt: "You are a technical documentation expert. Write clear, comprehensive \
-                     documentation with examples. Focus on clarity and completeness."
-                .to_string(),
-            tools: Some(vec![
+        AgentDefinition::builder()
+            .description("Writes comprehensive documentation")
+            .prompt(
+                "You are a technical documentation expert. Write clear, comprehensive \
+                 documentation with examples. Focus on clarity and completeness.",
+            )
+            .tools(vec![
                 "Read".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
-            ]),
-            model: Some(AgentModel::Sonnet),
-        },
+            ])
+            .model(AgentModel::Sonnet)
+            .build(),
     );
 
-    let options = ClaudeAgentOptions {
-        agents: Some(agents),
-        max_turns: Some(5),
-        ..Default::default()
-    };
+    let options = ClaudeAgentOptions::builder()
+        .agents(agents)
+        .max_turns(5)
+        .build();
 
     let messages = query(
         "Use the doc-writer agent to explain what AgentDefinition is used for",
@@ -103,39 +103,35 @@ async fn multiple_agents_example() -> anyhow::Result<()> {
     let mut agents = HashMap::new();
     agents.insert(
         "analyzer".to_string(),
-        AgentDefinition {
-            description: "Analyzes code structure and patterns".to_string(),
-            prompt: "You are a code analyzer. Examine code structure, patterns, and architecture."
-                .to_string(),
-            tools: Some(vec![
+        AgentDefinition::builder()
+            .description("Analyzes code structure and patterns")
+            .prompt("You are a code analyzer. Examine code structure, patterns, and architecture.")
+            .tools(vec![
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
-            ]),
-            model: None,
-        },
+            ])
+            .build(),
     );
     agents.insert(
         "tester".to_string(),
-        AgentDefinition {
-            description: "Creates and runs tests".to_string(),
-            prompt: "You are a testing expert. Write comprehensive tests and ensure code quality."
-                .to_string(),
-            tools: Some(vec![
+        AgentDefinition::builder()
+            .description("Creates and runs tests")
+            .prompt("You are a testing expert. Write comprehensive tests and ensure code quality.")
+            .tools(vec![
                 "Read".to_string(),
                 "Write".to_string(),
                 "Bash".to_string(),
-            ]),
-            model: Some(AgentModel::Sonnet),
-        },
+            ])
+            .model(AgentModel::Sonnet)
+            .build(),
     );
 
-    let options = ClaudeAgentOptions {
-        agents: Some(agents),
-        setting_sources: Some(vec![SettingSource::User, SettingSource::Project]),
-        max_turns: Some(5),
-        ..Default::default()
-    };
+    let options = ClaudeAgentOptions::builder()
+        .agents(agents)
+        .setting_sources(vec![SettingSource::User, SettingSource::Project])
+        .max_turns(5)
+        .build();
 
     let messages = query(
         "Use the analyzer agent to find all Rust source files in the examples/ directory",

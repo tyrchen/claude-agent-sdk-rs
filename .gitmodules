@@ -1,0 +1,3 @@
+[submodule "vendors/claude-agent-sdk-python"]
+	path = vendors/claude-agent-sdk-python
+	url = https://github.com/anthropics/claude-agent-sdk-python
