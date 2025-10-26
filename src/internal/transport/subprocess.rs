@@ -356,10 +356,7 @@ impl Transport for SubprocessTransport {
                 .write_all(b"\n")
                 .await
                 .map_err(TransportError::StdinWrite)?;
-            stdin
-                .flush()
-                .await
-                .map_err(TransportError::StdinWrite)?;
+            stdin.flush().await.map_err(TransportError::StdinWrite)?;
             Ok(())
         } else {
             Err(TransportError::StdinUnavailable.into())
@@ -457,10 +454,7 @@ impl Transport for SubprocessTransport {
 
     async fn end_input(&mut self) -> Result<()> {
         if let Some(mut stdin) = self.stdin.lock().await.take() {
-            stdin
-                .shutdown()
-                .await
-                .map_err(TransportError::StdinWrite)?;
+            stdin.shutdown().await.map_err(TransportError::StdinWrite)?;
         }
         Ok(())
     }
