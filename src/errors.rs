@@ -24,11 +24,11 @@ pub enum ClaudeError {
 
     /// Transport error
     #[error("Transport error: {0}")]
-    Transport(String),
+    Transport(#[from] TransportError),
 
     /// Control protocol error
     #[error("Control protocol error: {0}")]
-    ControlProtocol(String),
+    ControlProtocol(#[from] ControlProtocolError),
 
     /// Invalid configuration
     #[error("Invalid configuration: {0}")]
@@ -145,6 +145,74 @@ impl MessageParseError {
             data,
         }
     }
+}
+
+/// Transport error variants
+#[derive(Debug, Error)]
+pub enum TransportError {
+    /// Failed to write to stdin
+    #[error("Failed to write to stdin: {0}")]
+    StdinWrite(#[source] std::io::Error),
+
+    /// Failed to read from stdout
+    #[error("Failed to read from stdout: {0}")]
+    StdoutRead(#[source] std::io::Error),
+
+    /// Connection closed unexpectedly
+    #[error("Connection closed unexpectedly")]
+    ConnectionClosed,
+
+    /// Buffer size exceeded
+    #[error("Buffer size exceeded: {current} > {max}")]
+    BufferOverflow {
+        /// Current buffer size
+        current: usize,
+        /// Maximum allowed buffer size
+        max: usize,
+    },
+
+    /// Stdin not available
+    #[error("Stdin not available")]
+    StdinUnavailable,
+}
+
+/// Control protocol error variants
+#[derive(Debug, Error)]
+pub enum ControlProtocolError {
+    /// Invalid request: missing field
+    #[error("Invalid request: missing {field}")]
+    InvalidRequest {
+        /// Missing field name
+        field: String,
+    },
+
+    /// Request timeout
+    #[error("Request timeout after {timeout_ms}ms")]
+    Timeout {
+        /// Timeout duration in milliseconds
+        timeout_ms: u64,
+    },
+
+    /// Unknown control request subtype
+    #[error("Unknown control request subtype: {subtype}")]
+    UnknownSubtype {
+        /// The unknown subtype
+        subtype: String,
+    },
+
+    /// Hook callback not found
+    #[error("Hook callback not found: {callback_id}")]
+    HookNotFound {
+        /// Callback ID that was not found
+        callback_id: String,
+    },
+
+    /// MCP server not found
+    #[error("MCP server not found: {server_name}")]
+    McpServerNotFound {
+        /// Server name that was not found
+        server_name: String,
+    },
 }
 
 /// Result type for the Claude Agent SDK

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use typed_builder::TypedBuilder;
 
 use super::hooks::{HookEvent, HookMatcher};
@@ -65,6 +66,9 @@ pub struct ClaudeAgentOptions {
     /// Maximum buffer size for subprocess output
     #[builder(default, setter(strip_option))]
     pub max_buffer_size: Option<usize>,
+    /// Timeout for control requests (default: 30 seconds)
+    #[builder(default = Duration::from_secs(30))]
+    pub control_request_timeout: Duration,
     /// Callback for stderr output
     #[builder(default, setter(strip_option))]
     pub stderr_callback: Option<Arc<dyn Fn(String) + Send + Sync>>,

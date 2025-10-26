@@ -14,6 +14,7 @@ use tracing::warn;
 
 use crate::errors::{
     ClaudeError, CliNotFoundError, ConnectionError, JsonDecodeError, ProcessError, Result,
+    TransportError,
 };
 use crate::types::config::ClaudeAgentOptions;
 use crate::version::{
@@ -350,18 +351,18 @@ impl Transport for SubprocessTransport {
             stdin
                 .write_all(data.as_bytes())
                 .await
-                .map_err(|e| ClaudeError::Transport(format!("Failed to write to stdin: {}", e)))?;
+                .map_err(TransportError::StdinWrite)?;
             stdin
                 .write_all(b"\n")
                 .await
-                .map_err(|e| ClaudeError::Transport(format!("Failed to write newline: {}", e)))?;
+                .map_err(TransportError::StdinWrite)?;
             stdin
                 .flush()
                 .await
-                .map_err(|e| ClaudeError::Transport(format!("Failed to flush stdin: {}", e)))?;
+                .map_err(TransportError::StdinWrite)?;
             Ok(())
         } else {
-            Err(ClaudeError::Transport("stdin not available".to_string()))
+            Err(TransportError::StdinUnavailable.into())
         }
     }
 
@@ -387,10 +388,10 @@ impl Transport for SubprocessTransport {
                         Ok(n) => {
                             buffer_size += n;
                             if buffer_size > max_buffer_size {
-                                yield Err(ClaudeError::Transport(format!(
-                                    "Buffer size exceeded maximum of {} bytes",
-                                    max_buffer_size
-                                )));
+                                yield Err(TransportError::BufferOverflow {
+                                    current: buffer_size,
+                                    max: max_buffer_size
+                                }.into());
                                 break;
                             }
 
@@ -412,7 +413,7 @@ impl Transport for SubprocessTransport {
                             }
                         }
                         Err(e) => {
-                            yield Err(ClaudeError::Transport(format!("Failed to read line: {}", e)));
+                            yield Err(TransportError::StdoutRead(e).into());
                             break;
                         }
                     }
@@ -459,7 +460,7 @@ impl Transport for SubprocessTransport {
             stdin
                 .shutdown()
                 .await
-                .map_err(|e| ClaudeError::Transport(format!("Failed to close stdin: {}", e)))?;
+                .map_err(TransportError::StdinWrite)?;
         }
         Ok(())
     }
