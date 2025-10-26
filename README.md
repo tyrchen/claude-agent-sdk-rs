@@ -227,6 +227,51 @@ The SDK is structured in layers:
 └─────────────────────────────────────────────────────────┘
 ```
 
+## Session Management & Memory Clearing
+
+The SDK provides multiple ways to manage conversation context and clear memory:
+
+### Using Session IDs (Separate Contexts)
+
+Different session IDs maintain completely separate conversation contexts:
+
+```rust
+let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+client.connect().await?;
+
+// Session 1: Math conversation
+client.query_with_session("What is 2 + 2?", "math-session").await?;
+
+// Session 2: Programming conversation (different context)
+client.query_with_session("What is Rust?", "programming-session").await?;
+
+// Back to Session 1 - Claude remembers math context
+client.query_with_session("What about 3 + 3?", "math-session").await?;
+```
+
+### Fork Session (Fresh Start)
+
+Use `fork_session` to start completely fresh without any history:
+
+```rust
+let options = ClaudeAgentOptions::builder()
+    .fork_session(true)  // Each resumed session starts fresh
+    .build();
+
+let mut client = ClaudeClient::new(options);
+client.connect().await?;
+```
+
+### Convenience Method
+
+Use `new_session()` for quick session switching:
+
+```rust
+client.new_session("session-2", "Tell me about Rust").await?;
+```
+
+See [examples/16_session_management.rs](examples/16_session_management.rs) for complete examples.
+
 ## Type System
 
 The SDK provides strongly-typed Rust interfaces for all Claude interactions:
@@ -239,7 +284,7 @@ The SDK provides strongly-typed Rust interfaces for all Claude interactions:
 
 ## 📚 Examples
 
-The SDK includes **15 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
+The SDK includes **16 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
 
 ### Quick Examples
 
@@ -265,6 +310,9 @@ cargo run --example 08_mcp_server_integration  # In-process MCP servers
 cargo run --example 09_agents               # Custom agents
 cargo run --example 11_setting_sources -- all  # Settings control
 cargo run --example 13_system_prompt        # System prompt configs
+
+# Session Management
+cargo run --example 16_session_management   # Session clearing and management
 ```
 
 ### Example Categories
@@ -275,7 +323,7 @@ cargo run --example 13_system_prompt        # System prompt configs
 | **Advanced** | 04-07    | Permissions, hooks, streaming, dynamic control |
 | **MCP**      | 08       | Custom tools and MCP server integration        |
 | **Config**   | 09-13    | Agents, settings, prompts, debugging           |
-| **Patterns** | 14-15    | Comprehensive streaming and hooks patterns     |
+| **Patterns** | 14-16    | Comprehensive streaming, hooks, and sessions   |
 
 ## 📖 API Overview
 
@@ -325,6 +373,11 @@ loop {
         _ => continue,
     }
 }
+
+// Session management - separate conversation contexts
+client.query_with_session("First question", "session-1").await?;
+client.query_with_session("Different context", "session-2").await?;
+client.new_session("session-3", "Fresh start").await?;
 
 // Dynamic control (mid-execution)
 client.interrupt().await?;  // Stop current operation

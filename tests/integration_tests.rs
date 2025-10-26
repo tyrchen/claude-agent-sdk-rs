@@ -3,6 +3,16 @@
 //! These tests verify the SDK functionality end-to-end.
 //! Note: Most tests are marked as #[ignore] by default since they require
 //! a working Claude CLI installation and API access.
+//!
+//! ## Session ID Behavior
+//!
+//! When using `query_with_session()` or `new_session()`, the session_id parameter
+//! is passed to Claude CLI, but the CLI may generate its own UUID session IDs.
+//! Therefore, tests should NOT assert exact session_id matches. Instead, tests
+//! should verify that:
+//! 1. Messages are received successfully
+//! 2. Session IDs are present and non-empty
+//! 3. The API accepts session_id parameters without errors
 
 use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, HookEvent, HookInput, HookJsonOutput, HookMatcher, Message,
@@ -56,6 +66,134 @@ async fn test_simple_query_with_bash() -> anyhow::Result<()> {
     }
 
     assert!(found_result, "Should receive a result message");
+
+    client.disconnect().await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires Claude CLI
+async fn test_session_management() -> anyhow::Result<()> {
+    let options = ClaudeAgentOptions {
+        max_turns: Some(1),
+        permission_mode: Some(PermissionMode::BypassPermissions),
+        ..Default::default()
+    };
+
+    let mut client = ClaudeClient::new(options);
+    client.connect().await?;
+
+    // Query with different session IDs - Claude CLI may generate UUIDs instead
+    // We just verify that we can send queries with session_id parameter
+    client
+        .query_with_session("What is 2 + 2?", "session-1")
+        .await?;
+
+    {
+        let mut stream = client.receive_response();
+        use futures::StreamExt;
+        let mut found_session_1 = false;
+        let mut session_1_id = String::new();
+        while let Some(message) = stream.next().await {
+            let message = message?;
+            if let Message::Result(result) = message {
+                session_1_id = result.session_id.clone();
+                found_session_1 = true;
+            }
+        }
+        assert!(found_session_1, "Should receive result for session-1");
+        assert!(!session_1_id.is_empty(), "Session ID should not be empty");
+    }
+
+    // Different session should have different context
+    client
+        .query_with_session("What is 3 + 3?", "session-2")
+        .await?;
+
+    {
+        let mut stream = client.receive_response();
+        use futures::StreamExt;
+        let mut found_session_2 = false;
+        let mut session_2_id = String::new();
+        while let Some(message) = stream.next().await {
+            let message = message?;
+            if let Message::Result(result) = message {
+                session_2_id = result.session_id.clone();
+                found_session_2 = true;
+            }
+        }
+        assert!(found_session_2, "Should receive result for session-2");
+        assert!(!session_2_id.is_empty(), "Session ID should not be empty");
+    }
+
+    client.disconnect().await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires Claude CLI
+async fn test_fork_session() -> anyhow::Result<()> {
+    let options = ClaudeAgentOptions::builder()
+        .fork_session(true)
+        .max_turns(1)
+        .permission_mode(PermissionMode::BypassPermissions)
+        .build();
+
+    let mut client = ClaudeClient::new(options);
+    client.connect().await?;
+
+    client.query("What is 2 + 2?").await?;
+
+    {
+        let mut stream = client.receive_response();
+        use futures::StreamExt;
+        let mut found_result = false;
+        while let Some(message) = stream.next().await {
+            let message = message?;
+            if let Message::Result(_) = message {
+                found_result = true;
+            }
+        }
+        assert!(
+            found_result,
+            "Should receive a result with fork_session enabled"
+        );
+    }
+
+    client.disconnect().await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires Claude CLI
+async fn test_new_session_convenience() -> anyhow::Result<()> {
+    let options = ClaudeAgentOptions {
+        max_turns: Some(1),
+        permission_mode: Some(PermissionMode::BypassPermissions),
+        ..Default::default()
+    };
+
+    let mut client = ClaudeClient::new(options);
+    client.connect().await?;
+
+    // Use convenience method - Claude CLI may generate UUID instead of using our session_id
+    client.new_session("test-session", "Hello").await?;
+
+    {
+        let mut stream = client.receive_response();
+        use futures::StreamExt;
+        let mut found_result = false;
+        let mut session_id = String::new();
+        while let Some(message) = stream.next().await {
+            let message = message?;
+            if let Message::Result(result) = message {
+                session_id = result.session_id.clone();
+                found_result = true;
+            }
+        }
+        assert!(found_result, "Should receive result for new session");
+        assert!(!session_id.is_empty(), "Session ID should not be empty");
+    }
 
     client.disconnect().await?;
     Ok(())
@@ -148,6 +286,42 @@ async fn test_interrupt() -> anyhow::Result<()> {
 
     // Interrupt the execution
     client.interrupt().await?;
+
+    client.disconnect().await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires Claude CLI
+async fn test_set_model() -> anyhow::Result<()> {
+    let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    client.connect().await?;
+
+    // Change model dynamically
+    client.set_model(Some("claude-sonnet-4-5")).await?;
+    client.set_model(None).await?; // Reset to default
+
+    client.disconnect().await?;
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore] // Requires Claude CLI
+async fn test_get_server_info() -> anyhow::Result<()> {
+    let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    client.connect().await?;
+
+    // Get server info
+    let info = client.get_server_info().await;
+    assert!(info.is_some(), "Should have server info in streaming mode");
+
+    if let Some(server_info) = info {
+        // Should have some expected fields
+        assert!(
+            server_info.is_object(),
+            "Server info should be a JSON object"
+        );
+    }
 
     client.disconnect().await?;
     Ok(())

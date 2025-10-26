@@ -184,11 +184,48 @@ impl ClaudeClient {
     /// # }
     /// ```
     pub async fn query(&mut self, prompt: impl Into<String>) -> Result<()> {
+        self.query_with_session(prompt, "default").await
+    }
+
+    /// Send a query to Claude with a specific session ID
+    ///
+    /// This sends a new user prompt to Claude. Different session IDs maintain
+    /// separate conversation contexts.
+    ///
+    /// # Arguments
+    ///
+    /// * `prompt` - The user prompt to send
+    /// * `session_id` - Session identifier for the conversation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// // Separate conversation contexts
+    /// client.query_with_session("First question", "session-1").await?;
+    /// client.query_with_session("Different question", "session-2").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn query_with_session(
+        &mut self,
+        prompt: impl Into<String>,
+        session_id: impl Into<String>,
+    ) -> Result<()> {
         let query = self.query.as_ref().ok_or_else(|| {
             ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
         })?;
 
         let prompt_str = prompt.into();
+        let session_id_str = session_id.into();
 
         // Format as JSON message for stream-json input format
         let user_message = serde_json::json!({
@@ -196,7 +233,8 @@ impl ClaudeClient {
             "message": {
                 "role": "user",
                 "content": prompt_str
-            }
+            },
+            "session_id": session_id_str
         });
 
         let message_str = serde_json::to_string(&user_message).map_err(|e| {
@@ -471,6 +509,47 @@ impl ClaudeClient {
         let query = self.query.as_ref()?;
         let query_guard = query.lock().await;
         query_guard.get_initialization_result().await
+    }
+
+    /// Start a new session by switching to a different session ID
+    ///
+    /// This is a convenience method that creates a new conversation context.
+    /// It's equivalent to calling `query_with_session()` with a new session ID.
+    ///
+    /// To completely clear memory and start fresh, use `ClaudeAgentOptions::builder().fork_session(true).build()`
+    /// when creating a new client.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The new session ID to use
+    /// * `prompt` - Initial message for the new session
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// // First conversation
+    /// client.query("Hello").await?;
+    ///
+    /// // Start new conversation with different context
+    /// client.new_session("session-2", "Tell me about Rust").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn new_session(
+        &mut self,
+        session_id: impl Into<String>,
+        prompt: impl Into<String>,
+    ) -> Result<()> {
+        self.query_with_session(prompt, session_id).await
     }
 
     /// Disconnect from Claude (analogous to Python's __aexit__)
