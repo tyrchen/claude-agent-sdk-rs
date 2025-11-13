@@ -9,6 +9,7 @@ use typed_builder::TypedBuilder;
 use super::hooks::{HookEvent, HookMatcher};
 use super::mcp::McpServers;
 use super::permissions::CanUseToolCallback;
+use super::plugin::SdkPluginConfig;
 
 /// Main configuration options for Claude Agent
 #[derive(Clone, TypedBuilder)]
@@ -41,6 +42,15 @@ pub struct ClaudeAgentOptions {
     /// Model to use
     #[builder(default, setter(into, strip_option))]
     pub model: Option<String>,
+    /// Fallback model to use if primary model fails
+    #[builder(default, setter(into, strip_option))]
+    pub fallback_model: Option<String>,
+    /// Maximum budget in USD for the conversation
+    #[builder(default, setter(strip_option))]
+    pub max_budget_usd: Option<f64>,
+    /// Maximum tokens for thinking blocks
+    #[builder(default, setter(strip_option))]
+    pub max_thinking_tokens: Option<u32>,
     /// Tool name for permission prompts
     #[builder(default, setter(into, strip_option))]
     pub permission_prompt_tool_name: Option<String>,
@@ -89,6 +99,9 @@ pub struct ClaudeAgentOptions {
     /// Setting sources to use
     #[builder(default, setter(strip_option))]
     pub setting_sources: Option<Vec<SettingSource>>,
+    /// Plugin configurations for custom plugins
+    #[builder(default, setter(into))]
+    pub plugins: Vec<SdkPluginConfig>,
 }
 
 impl Default for ClaudeAgentOptions {

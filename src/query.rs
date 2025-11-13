@@ -2,9 +2,13 @@
 
 use crate::errors::Result;
 use crate::internal::client::InternalClient;
+use crate::internal::message_parser::MessageParser;
 use crate::internal::transport::subprocess::QueryPrompt;
+use crate::internal::transport::{SubprocessTransport, Transport};
 use crate::types::config::ClaudeAgentOptions;
 use crate::types::messages::Message;
+use futures::stream::{Stream, StreamExt};
+use std::pin::Pin;
 
 /// Query Claude Code for one-shot interactions.
 ///
@@ -45,4 +49,77 @@ pub async fn query(
 
     let client = InternalClient::new(query_prompt, opts)?;
     client.execute().await
+}
+
+/// Query Claude Code with streaming responses for memory-efficient processing.
+///
+/// Unlike `query()` which collects all messages in memory before returning,
+/// this function returns a stream that yields messages as they arrive from Claude.
+/// This is more memory-efficient for large conversations and provides real-time
+/// message processing capabilities.
+///
+/// # Performance Comparison
+///
+/// - **`query()`**: O(n) memory usage, waits for all messages before returning
+/// - **`query_stream()`**: O(1) memory per message, processes messages in real-time
+///
+/// # Examples
+///
+/// ```no_run
+/// use claude_agent_sdk_rs::{query_stream, Message, ContentBlock};
+/// use futures::stream::StreamExt;
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     let mut stream = query_stream("What is 2 + 2?", None).await?;
+///
+///     while let Some(result) = stream.next().await {
+///         match result? {
+///             Message::Assistant(msg) => {
+///                 for block in &msg.message.content {
+///                     if let ContentBlock::Text(text) = block {
+///                         println!("Claude: {}", text.text);
+///                     }
+///                 }
+///             }
+///             _ => {}
+///         }
+///     }
+///
+///     Ok(())
+/// }
+/// ```
+pub async fn query_stream(
+    prompt: impl Into<String>,
+    options: Option<ClaudeAgentOptions>,
+) -> Result<Pin<Box<dyn Stream<Item = Result<Message>> + Send>>> {
+    let query_prompt = QueryPrompt::Text(prompt.into());
+    let opts = options.unwrap_or_default();
+
+    let mut transport = SubprocessTransport::new(query_prompt, opts)?;
+    transport.connect().await?;
+
+    // Move transport into the stream to extend its lifetime
+    let stream = async_stream::stream! {
+        let mut message_stream = transport.read_messages();
+        while let Some(json_result) = message_stream.next().await {
+            match json_result {
+                Ok(json) => {
+                    match MessageParser::parse(json) {
+                        Ok(message) => yield Ok(message),
+                        Err(e) => {
+                            yield Err(e);
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    yield Err(e);
+                    break;
+                }
+            }
+        }
+    };
+
+    Ok(Box::pin(stream))
 }

@@ -1,14 +1,14 @@
 [package]
 name = "claude-agent-sdk-rs"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.90"
 license = "MIT"
 documentation = "https://docs.rs/claude-agent-sdk-rs"
 repository = "https://github.com/tyrchen/claude-agent-sdk-rs"
 homepage = "https://github.com/tyrchen/claude-agent-sdk-rs"
-description = "Rust SDK for Claude Code CLI with bidirectional streaming, hooks, and custom tools support"
+description = "Rust SDK for Claude Code CLI with bidirectional streaming, hooks, custom tools, and plugin support - 100% feature parity with Python SDK"
 readme = "README.md"
 categories = ["development-tools", "api-bindings", "asynchronous"]
 keywords = ["claude", "ai", "agent", "anthropic", "llm"]

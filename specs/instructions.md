@@ -53,3 +53,7 @@ async fn print_tool_info(input: HookInput, tool_use_id: Option<String>, context:
 The `add_xxx` functions are generated using a macro based on the HookEvent enum (hooks.rs).
 
 Please think ultra hard and make this user friendly and easy to use. Update 05 example once done. Run it to see if works.
+
+## latest python sdk
+
+Read the latest python sdk code in ./vendors/claude-agent-sdk-python, and also the Rust code in ./src carefully and thoroughly, think ultra hard and make a good plan to ensure the Rust sdk is feature parity with the Python sdk. Put it in ./specs/0003-feature-parity-0.1.6.md.

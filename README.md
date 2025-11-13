@@ -12,15 +12,18 @@ Rust SDK for interacting with Claude Code CLI, enabling programmatic access to C
 
 ## ✨ Features
 
-- 🚀 **Simple Query API**: One-shot queries for stateless interactions
+- 🚀 **Simple Query API**: One-shot queries for stateless interactions with both collecting and streaming modes
 - 🔄 **Bidirectional Streaming**: Real-time streaming communication with `ClaudeClient`
 - 🎛️ **Dynamic Control**: Interrupt, change permissions, switch models mid-execution
 - 🪝 **Hooks System**: Intercept and control Claude's behavior at runtime
 - 🛠️ **Custom Tools**: In-process MCP servers with ergonomic tool macro
+- 🔌 **Plugin System**: Load custom plugins to extend Claude's capabilities
 - 🔐 **Permission Management**: Fine-grained control over tool execution
+- 💰 **Cost Control**: Budget limits and fallback models for production reliability
+- 🧠 **Extended Thinking**: Configure maximum thinking tokens for complex reasoning
 - 🦀 **Type Safety**: Strongly-typed messages, configs, hooks, and permissions
 - ⚡ **Zero Deadlock**: Lock-free architecture for concurrent read/write
-- 📚 **Comprehensive Examples**: 15 complete examples covering all features
+- 📚 **Comprehensive Examples**: 22 complete examples covering all features
 - 🧪 **Well Tested**: Extensive test coverage with unit and integration tests
 
 ## 📦 Installation
@@ -84,6 +87,39 @@ let options = ClaudeAgentOptions {
 
 let messages = query("Create a hello.txt file", Some(options)).await?;
 ```
+
+### Streaming Query (Memory-Efficient)
+
+For large conversations or real-time processing, use `query_stream()`:
+
+```rust
+use claude_agent_sdk_rs::{query_stream, Message, ContentBlock};
+use futures::stream::StreamExt;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Get a stream of messages instead of collecting them all
+    let mut stream = query_stream("What is 2 + 2?", None).await?;
+
+    // Process messages as they arrive (O(1) memory)
+    while let Some(result) = stream.next().await {
+        let message = result?;
+        if let Message::Assistant(msg) = message {
+            for block in msg.message.content {
+                if let ContentBlock::Text(text) = block {
+                    println!("Claude: {}", text.text);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+**When to use:**
+- `query()`: Small to medium conversations, need all messages for post-processing
+- `query_stream()`: Large conversations, real-time processing, memory constraints
 
 ### Bidirectional Conversation (Multi-turn)
 
@@ -284,7 +320,7 @@ The SDK provides strongly-typed Rust interfaces for all Claude interactions:
 
 ## 📚 Examples
 
-The SDK includes **16 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
+The SDK includes **22 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
 
 ### Quick Examples
 
@@ -311,19 +347,31 @@ cargo run --example 09_agents               # Custom agents
 cargo run --example 11_setting_sources -- all  # Settings control
 cargo run --example 13_system_prompt        # System prompt configs
 
+# Production Features
+cargo run --example 17_fallback_model       # Fallback model for reliability
+cargo run --example 18_max_budget_usd       # Budget control
+cargo run --example 19_max_thinking_tokens  # Extended thinking limits
+cargo run --example 20_query_stream         # Streaming query API
+
+# Plugin System
+cargo run --example 21_custom_plugins       # Load custom plugins
+cargo run --example 22_plugin_integration   # Real-world plugin usage
+
 # Session Management
 cargo run --example 16_session_management   # Session clearing and management
 ```
 
 ### Example Categories
 
-| Category     | Examples | Description                                    |
-| ------------ | -------- | ---------------------------------------------- |
-| **Basics**   | 01-03    | Simple queries, tool control, monitoring       |
-| **Advanced** | 04-07    | Permissions, hooks, streaming, dynamic control |
-| **MCP**      | 08       | Custom tools and MCP server integration        |
-| **Config**   | 09-13    | Agents, settings, prompts, debugging           |
-| **Patterns** | 14-16    | Comprehensive streaming, hooks, and sessions   |
+| Category        | Examples | Description                                         |
+| --------------- | -------- | --------------------------------------------------- |
+| **Basics**      | 01-03    | Simple queries, tool control, monitoring            |
+| **Advanced**    | 04-07    | Permissions, hooks, streaming, dynamic control      |
+| **MCP**         | 08       | Custom tools and MCP server integration             |
+| **Config**      | 09-13    | Agents, settings, prompts, debugging                |
+| **Patterns**    | 14-16    | Comprehensive streaming, hooks, and sessions        |
+| **Production**  | 17-20    | Fallback models, budgets, thinking limits, streaming|
+| **Plugins**     | 21-22    | Custom plugin loading and integration               |
 
 ## 📖 API Overview
 
@@ -333,12 +381,17 @@ cargo run --example 16_session_management   # Session clearing and management
 // Main client for bidirectional streaming
 ClaudeSDKClient
 
-// Simple query function for one-shot interactions
+// Simple query functions for one-shot interactions
 query(prompt: &str, options: Option<ClaudeAgentOptions>) -> Vec<Message>
+query_stream(prompt: &str, options: Option<ClaudeAgentOptions>) -> Stream<Item = Result<Message>>
 
 // Configuration
 ClaudeAgentOptions {
     model: Option<String>,
+    fallback_model: Option<String>,      // NEW: Backup model for reliability
+    max_budget_usd: Option<f64>,         // NEW: Cost control
+    max_thinking_tokens: Option<u32>,    // NEW: Extended thinking limit
+    plugins: Vec<SdkPluginConfig>,       // NEW: Custom plugin loading
     max_turns: Option<u32>,
     allowed_tools: Vec<String>,
     system_prompt: Option<SystemPromptConfig>,

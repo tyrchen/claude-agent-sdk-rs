@@ -183,6 +183,24 @@ impl SubprocessTransport {
             args.push(model.clone());
         }
 
+        // Add fallback model
+        if let Some(ref fallback_model) = self.options.fallback_model {
+            args.push("--fallback-model".to_string());
+            args.push(fallback_model.clone());
+        }
+
+        // Add max budget USD
+        if let Some(max_budget) = self.options.max_budget_usd {
+            args.push("--max-budget-usd".to_string());
+            args.push(max_budget.to_string());
+        }
+
+        // Add max thinking tokens
+        if let Some(max_thinking) = self.options.max_thinking_tokens {
+            args.push("--max-thinking-tokens".to_string());
+            args.push(max_thinking.to_string());
+        }
+
         // Add max turns
         if let Some(max_turns) = self.options.max_turns {
             args.push("--max-turns".to_string());
@@ -203,6 +221,14 @@ impl SubprocessTransport {
         // Add fork session
         if self.options.fork_session {
             args.push("--fork-session".to_string());
+        }
+
+        // Add plugins
+        for plugin in &self.options.plugins {
+            if let Some(path) = plugin.path() {
+                args.push("--plugin-dir".to_string());
+                args.push(path.display().to_string());
+            }
         }
 
         // Add extra args

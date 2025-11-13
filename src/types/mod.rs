@@ -5,3 +5,4 @@ pub mod hooks;
 pub mod mcp;
 pub mod messages;
 pub mod permissions;
+pub mod plugin;
