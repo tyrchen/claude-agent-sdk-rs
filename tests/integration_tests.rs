@@ -698,7 +698,8 @@ async fn test_plugin_integration() -> anyhow::Result<()> {
                             _ => {}
                         }
                     }
-                }).await;
+                })
+                .await;
             }
 
             let _ = client.disconnect().await;
