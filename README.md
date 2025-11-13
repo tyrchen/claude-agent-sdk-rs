@@ -8,19 +8,20 @@
 
 Rust SDK for interacting with Claude Code CLI, enabling programmatic access to Claude's capabilities with **full bidirectional streaming support**.
 
-**Status**: ✅ 100% feature parity with Python SDK - Ready for dev use
+**Status**: ✅ 100% feature parity with Python SDK - Production Ready
 
 ## ✨ Features
 
 - 🚀 **Simple Query API**: One-shot queries for stateless interactions with both collecting and streaming modes
 - 🔄 **Bidirectional Streaming**: Real-time streaming communication with `ClaudeClient`
 - 🎛️ **Dynamic Control**: Interrupt, change permissions, switch models mid-execution
-- 🪝 **Hooks System**: Intercept and control Claude's behavior at runtime
-- 🛠️ **Custom Tools**: In-process MCP servers with ergonomic tool macro
+- 🪝 **Hooks System**: Intercept and control Claude's behavior with ergonomic builder API
+- 🛠️ **Custom Tools**: In-process MCP servers with ergonomic `tool!` macro
 - 🔌 **Plugin System**: Load custom plugins to extend Claude's capabilities
 - 🔐 **Permission Management**: Fine-grained control over tool execution
 - 💰 **Cost Control**: Budget limits and fallback models for production reliability
 - 🧠 **Extended Thinking**: Configure maximum thinking tokens for complex reasoning
+- 📊 **Session Management**: Separate contexts and memory clearing with fork_session
 - 🦀 **Type Safety**: Strongly-typed messages, configs, hooks, and permissions
 - ⚡ **Zero Deadlock**: Lock-free architecture for concurrent read/write
 - 📚 **Comprehensive Examples**: 22 complete examples covering all features
@@ -32,7 +33,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-claude-agent-sdk-rs = "0.1"
+claude-agent-sdk-rs = "0.3"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -45,7 +46,7 @@ cargo add tokio --features full
 
 ## 🎯 Prerequisites
 
-- **Rust**: 1.70 or higher
+- **Rust**: 1.90 or higher
 - **Claude Code CLI**: Version 2.0.0 or higher ([Installation Guide](https://docs.claude.com/claude-code))
 - **API Key**: Anthropic API key set in environment or Claude Code config
 
@@ -124,11 +125,11 @@ async fn main() -> anyhow::Result<()> {
 ### Bidirectional Conversation (Multi-turn)
 
 ```rust
-use claude_agent_sdk_rs::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut client = ClaudeSDKClient::new(ClaudeAgentOptions::default());
+    let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
 
     // Connect to Claude
     client.connect().await?;
@@ -379,7 +380,7 @@ cargo run --example 16_session_management   # Session clearing and management
 
 ```rust
 // Main client for bidirectional streaming
-ClaudeSDKClient
+ClaudeClient
 
 // Simple query functions for one-shot interactions
 query(prompt: &str, options: Option<ClaudeAgentOptions>) -> Vec<Message>
@@ -407,11 +408,11 @@ Message::System(SystemMessage)
 Message::Result(ResultMessage)
 ```
 
-### ClaudeSDKClient (Bidirectional Streaming)
+### ClaudeClient (Bidirectional Streaming)
 
 ```rust
 // Create and connect
-let mut client = ClaudeSDKClient::new(options);
+let mut client = ClaudeClient::new(options);
 client.connect().await?;
 
 // Send queries
@@ -566,7 +567,7 @@ The Rust SDK closely mirrors the Python SDK API:
 
 | Python                                        | Rust                                        |
 | --------------------------------------------- | ------------------------------------------- |
-| `async with ClaudeSDKClient() as client:`     | `client.connect().await?`                   |
+| `async with ClaudeClient() as client:`     | `client.connect().await?`                   |
 | `await client.query("...")`                   | `client.query("...").await?`                |
 | `async for msg in client.receive_response():` | `while let Some(msg) = stream.next().await` |
 | `await client.interrupt()`                    | `client.interrupt().await?`                 |
@@ -580,7 +581,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/claude-agent-sdk-rs
+git clone https://github.com/tyrchen/claude-agent-sdk-rs
 cd claude-agent-sdk-rs
 
 # Install dependencies

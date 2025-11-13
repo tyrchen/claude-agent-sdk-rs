@@ -12,15 +12,19 @@ Rust SDK 用于与 Claude Code CLI 交互，提供对 Claude 功能的编程访�
 
 ## ✨ 特性
 
-- 🚀 **简单查询 API**: 用于无状态交互的一次性查询
+- 🚀 **简单查询 API**: 用于无状态交互的一次性查询，支持收集和流式两种模式
 - 🔄 **双向流式传输**: 使用 `ClaudeClient` 进行实时流式通信
 - 🎛️ **动态控制**: 中断、更改权限、执行中切换模型
-- 🪝 **钩子系统**: 运行时拦截和控制 Claude 的行为
-- 🛠️ **自定义工具**: 进程内 MCP 服务器，提供简洁的工具宏
+- 🪝 **钩子系统**: 运行时拦截和控制 Claude 的行为，提供简洁的构建器 API
+- 🛠️ **自定义工具**: 进程内 MCP 服务器，提供简洁的 `tool!` 宏
+- 🔌 **插件系统**: 加载自定义插件以扩展 Claude 的能力
 - 🔐 **权限管理**: 对工具执行的细粒度控制
+- 💰 **成本控制**: 预算限制和后备模型，提供生产可靠性
+- 🧠 **扩展思考**: 配置最大思考令牌数以进行复杂推理
+- 📊 **会话管理**: 使用 fork_session 实现独立上下文和内存清除
 - 🦀 **类型安全**: 强类型的消息、配置、钩子和权限
 - ⚡ **零死锁**: 无锁架构，支持并发读写
-- 📚 **全面示例**: 15+ 个示例涵盖所有功能
+- 📚 **全面示例**: 22 个完整示例涵盖所有功能
 - 🧪 **充分测试**: 广泛的单元测试和集成测试覆盖
 
 ## 📦 安装
@@ -29,7 +33,7 @@ Rust SDK 用于与 Claude Code CLI 交互，提供对 Claude 功能的编程访�
 
 ```toml
 [dependencies]
-claude-agent-sdk-rs = "0.1"
+claude-agent-sdk-rs = "0.3"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -42,7 +46,7 @@ cargo add tokio --features full
 
 ## 🎯 前置要求
 
-- **Rust**: 1.70 或更高版本
+- **Rust**: 1.90 或更高版本
 - **Claude Code CLI**: 2.0.0 或更高版本 ([安装指南](https://docs.claude.com/claude-code))
 - **API 密钥**: 在环境变量或 Claude Code 配置中设置 Anthropic API 密钥
 
@@ -88,11 +92,11 @@ let messages = query("创建一个 hello.txt 文件", Some(options)).await?;
 ### 双向对话（多轮）
 
 ```rust
-use claude_agent_sdk_rs::{ClaudeSDKClient, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut client = ClaudeSDKClient::new(ClaudeAgentOptions::default());
+    let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
 
     // 连接到 Claude
     client.connect().await?;
@@ -185,7 +189,7 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let mut client = ClaudeSDKClient::new(options);
+    let mut client = ClaudeClient::new(options);
     client.connect().await?;
 
     // Claude 现在可以使用你的自定义工具了！
@@ -239,7 +243,7 @@ SDK 为所有 Claude 交互提供强类型的 Rust 接口:
 
 ## 📚 示例
 
-SDK 包含 15+ 个全面的示例，演示所有功能。详见 [examples/README.md](examples/README.md)。
+SDK 包含 22 个全面的示例，演示所有功能。详见 [examples/README.md](examples/README.md)。
 
 ### 快速示例
 
@@ -283,7 +287,7 @@ cargo run --example 13_system_prompt        # 系统提示配置
 
 ```rust
 // 双向流式传输的主客户端
-ClaudeSDKClient
+ClaudeClient
 
 // 用于一次性交互的简单查询函数
 query(prompt: &str, options: Option<ClaudeAgentOptions>) -> Vec<Message>
@@ -306,11 +310,11 @@ Message::System(SystemMessage)
 Message::Result(ResultMessage)
 ```
 
-### ClaudeSDKClient（双向流式传输）
+### ClaudeClient（双向流式传输）
 
 ```rust
 // 创建并连接
-let mut client = ClaudeSDKClient::new(options);
+let mut client = ClaudeClient::new(options);
 client.connect().await?;
 
 // 发送查询
@@ -460,7 +464,7 @@ Rust SDK 紧密镜像 Python SDK API:
 
 | Python                                        | Rust                                        |
 | --------------------------------------------- | ------------------------------------------- |
-| `async with ClaudeSDKClient() as client:`     | `client.connect().await?`                   |
+| `async with ClaudeClient() as client:`     | `client.connect().await?`                   |
 | `await client.query("...")`                   | `client.query("...").await?`                |
 | `async for msg in client.receive_response():` | `while let Some(msg) = stream.next().await` |
 | `await client.interrupt()`                    | `client.interrupt().await?`                 |
@@ -474,7 +478,7 @@ Rust SDK 紧密镜像 Python SDK API:
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/claude-agent-sdk-rs
+git clone https://github.com/tyrchen/claude-agent-sdk-rs
 cd claude-agent-sdk-rs
 
 # 安装依赖
