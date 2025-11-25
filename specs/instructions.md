@@ -57,3 +57,9 @@ Please think ultra hard and make this user friendly and easy to use. Update 05 e
 ## latest python sdk
 
 Read the latest python sdk code in ./vendors/claude-agent-sdk-python, and also the Rust code in ./src carefully and thoroughly, think ultra hard and make a good plan to ensure the Rust sdk is feature parity with the Python sdk. Put it in ./specs/0003-feature-parity-0.1.6.md.
+
+## upgrade to match latest python sdk
+
+update submodules to the latest version and see if rust code need to be updated accordingly to keep up to the claude python sdk
+
+manually run all examples concurrently to make sure they work as expected

@@ -24,7 +24,8 @@ async fn main() -> anyhow::Result<()> {
     println!("=== Example 19: Maximum Thinking Tokens ===\n");
 
     // Configure with thinking token limit
-    let max_thinking = 1000;
+    // Note: API requires minimum of 1024 thinking tokens
+    let max_thinking = 2048;
     let options = ClaudeAgentOptions::builder()
         .max_thinking_tokens(max_thinking)
         .permission_mode(PermissionMode::BypassPermissions)
@@ -32,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         .build();
 
     println!("Configured with:");
-    println!("  Max thinking tokens: {}", max_thinking);
+    println!("  Max thinking tokens: {} (minimum: 1024)", max_thinking);
     println!("  Max turns: 3\n");
     println!("Asking Claude a problem that benefits from thinking...\n");
 

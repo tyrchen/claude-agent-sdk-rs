@@ -19,15 +19,15 @@ async fn main() -> anyhow::Result<()> {
 
     // Configure with both primary and fallback models
     let options = ClaudeAgentOptions::builder()
-        .model("claude-opus-4")
-        .fallback_model("claude-sonnet-4")
+        .model("claude-sonnet-4-5-20250929")
+        .fallback_model("claude-sonnet-4-20250514")
         .permission_mode(PermissionMode::BypassPermissions)
         .max_turns(3)
         .build();
 
     println!("Configured with:");
-    println!("  Primary model: claude-opus-4");
-    println!("  Fallback model: claude-sonnet-4\n");
+    println!("  Primary model: claude-sonnet-4-5-20250929");
+    println!("  Fallback model: claude-sonnet-4-20250514\n");
     println!("Asking Claude a simple question...\n");
 
     // Query Claude

@@ -124,10 +124,17 @@ impl QueryFull {
                         callback_ids.push(callback_id);
                     }
 
-                    event_matchers.push(json!({
+                    let mut matcher_json = json!({
                         "matcher": matcher.matcher,
                         "hookCallbackIds": callback_ids
-                    }));
+                    });
+
+                    // Add timeout if specified
+                    if let Some(timeout) = matcher.timeout {
+                        matcher_json["timeout"] = json!(timeout);
+                    }
+
+                    event_matchers.push(matcher_json);
                 }
 
                 hooks_config.insert(event, event_matchers);

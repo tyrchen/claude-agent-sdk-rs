@@ -251,6 +251,7 @@ async fn example_pretooluse() -> anyhow::Result<()> {
             hooks: vec![Arc::new(|input, tool_use_id, context| {
                 Box::pin(check_bash_command(input, tool_use_id, context))
             })],
+            timeout: None,
         }],
     );
 
@@ -336,6 +337,7 @@ async fn example_userpromptsubmit() -> anyhow::Result<()> {
             hooks: vec![Arc::new(|input, tool_use_id, context| {
                 Box::pin(add_custom_instructions(input, tool_use_id, context))
             })],
+            timeout: None,
         }],
     );
 
@@ -391,6 +393,7 @@ async fn example_posttooluse() -> anyhow::Result<()> {
             hooks: vec![Arc::new(|input, tool_use_id, context| {
                 Box::pin(review_tool_output(input, tool_use_id, context))
             })],
+            timeout: None,
         }],
     );
 
@@ -447,6 +450,7 @@ async fn example_decision_fields() -> anyhow::Result<()> {
             hooks: vec![Arc::new(|input, tool_use_id, context| {
                 Box::pin(strict_approval_hook(input, tool_use_id, context))
             })],
+            timeout: None,
         }],
     );
 
@@ -532,6 +536,7 @@ async fn example_continue_control() -> anyhow::Result<()> {
             hooks: vec![Arc::new(|input, tool_use_id, context| {
                 Box::pin(stop_on_error_hook(input, tool_use_id, context))
             })],
+            timeout: None,
         }],
     );
 

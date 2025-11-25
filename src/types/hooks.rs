@@ -33,6 +33,9 @@ pub struct HookMatcher {
     /// Hook callbacks to invoke
     #[builder(default)]
     pub hooks: Vec<HookCallback>,
+    /// Timeout in seconds for all hooks in this matcher (default: 60)
+    #[builder(default, setter(strip_option))]
+    pub timeout: Option<f64>,
 }
 
 /// Hook callback type
@@ -1006,6 +1009,7 @@ impl Hooks {
         self.hooks.entry(event).or_default().push(HookMatcher {
             matcher: matcher_string,
             hooks: vec![hook_callback],
+            timeout: None,
         });
     }
 

@@ -2,6 +2,24 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Error types for assistant messages
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AssistantMessageError {
+    /// Authentication failed
+    AuthenticationFailed,
+    /// Billing error
+    BillingError,
+    /// Rate limit exceeded
+    RateLimit,
+    /// Invalid request
+    InvalidRequest,
+    /// Server error
+    ServerError,
+    /// Unknown error
+    Unknown,
+}
+
 /// Main message enum containing all message types from CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -107,6 +125,9 @@ pub struct AssistantMessageInner {
     /// Usage statistics
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<serde_json::Value>,
+    /// Error type (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<AssistantMessageError>,
 }
 
 /// System message
@@ -164,6 +185,9 @@ pub struct ResultMessage {
     /// Result text (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<String>,
+    /// Structured output (when output_format is specified)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub structured_output: Option<serde_json::Value>,
 }
 
 /// Stream event message

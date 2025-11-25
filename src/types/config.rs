@@ -102,6 +102,10 @@ pub struct ClaudeAgentOptions {
     /// Plugin configurations for custom plugins
     #[builder(default, setter(into))]
     pub plugins: Vec<SdkPluginConfig>,
+    /// Output format for structured outputs (matches Messages API structure)
+    /// Example: `json!({"type": "json_schema", "schema": {"type": "object", "properties": {...}}})`
+    #[builder(default, setter(strip_option))]
+    pub output_format: Option<serde_json::Value>,
 }
 
 impl Default for ClaudeAgentOptions {

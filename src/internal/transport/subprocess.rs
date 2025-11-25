@@ -201,6 +201,17 @@ impl SubprocessTransport {
             args.push(max_thinking.to_string());
         }
 
+        // Add output format (structured outputs / JSON schema)
+        // Expected format: {"type": "json_schema", "schema": {...}}
+        if let Some(ref output_format) = self.options.output_format {
+            if output_format.get("type") == Some(&serde_json::json!("json_schema")) {
+                if let Some(schema) = output_format.get("schema") {
+                    args.push("--json-schema".to_string());
+                    args.push(schema.to_string());
+                }
+            }
+        }
+
         // Add max turns
         if let Some(max_turns) = self.options.max_turns {
             args.push("--max-turns".to_string());

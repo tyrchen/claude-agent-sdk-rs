@@ -217,6 +217,7 @@ async fn test_hook_pretooluse() -> anyhow::Result<()> {
                     })
                 })
             })],
+            timeout: None,
         }],
     );
 
@@ -468,8 +469,8 @@ fn test_new_options_defaults() {
 #[ignore] // Requires Claude CLI
 async fn test_fallback_model_integration() -> anyhow::Result<()> {
     let options = ClaudeAgentOptions::builder()
-        .model("claude-opus-4")
-        .fallback_model("claude-sonnet-4")
+        .model("claude-sonnet-4-5-20250929")
+        .fallback_model("claude-sonnet-4-20250514")
         .max_turns(1)
         .permission_mode(PermissionMode::BypassPermissions)
         .build();
@@ -536,8 +537,9 @@ async fn test_max_budget_integration() -> anyhow::Result<()> {
 #[tokio::test]
 #[ignore] // Requires Claude CLI
 async fn test_max_thinking_tokens_integration() -> anyhow::Result<()> {
+    // API requires minimum of 1024 thinking tokens
     let options = ClaudeAgentOptions::builder()
-        .max_thinking_tokens(1000)
+        .max_thinking_tokens(2048)
         .max_turns(1)
         .permission_mode(PermissionMode::BypassPermissions)
         .build();
