@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.3.1](https://github.com/compare/v0.3.0..v0.3.1) - 2025-11-25
+
+### Features
+
+- sync with Python SDK v0.1.9 and fix examples - ([51f62b9](https://github.com/commit/51f62b9afc2ae8624b5dba3585105d00d2fa8888)) - Tyr Chen
+
+### Miscellaneous Chores
+
+- update readme - ([d778b40](https://github.com/commit/d778b40b6fb0bb7a8cc6a25b7613dab304872595)) - Tyr Chen
+- fix fmt - ([3b3e770](https://github.com/commit/3b3e770906b8a64cc4c74a08550062786a3a7fd1)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([97165bf](https://github.com/commit/97165bf9f9dc171e24fd23dd2ee2d9bd5535bebc)) - Tyr Chen
+
+---
 ## [0.3.0](https://github.com/compare/v0.2.1..v0.3.0) - 2025-11-13
 
 ### Documentation
