@@ -96,15 +96,22 @@ impl SubprocessTransport {
             }
         }
 
-        // Common installation locations
-        let common_paths = vec![
-            "/usr/local/bin/claude",
-            "/opt/homebrew/bin/claude",
-            "~/.local/bin/claude",
+        // Get home directory for path expansion
+        // Note: ~ is not expanded by PathBuf, so we need to resolve it manually
+        let home_dir = std::env::var("HOME").ok().map(PathBuf::from);
+
+        // Common installation locations (with expanded home directory)
+        let mut common_paths: Vec<PathBuf> = vec![
+            PathBuf::from("/usr/local/bin/claude"),
+            PathBuf::from("/opt/homebrew/bin/claude"),
         ];
 
-        for path_str in common_paths {
-            let path = PathBuf::from(path_str);
+        // Add home-relative paths if home directory is available
+        if let Some(ref home) = home_dir {
+            common_paths.push(home.join(".local/bin/claude"));
+        }
+
+        for path in common_paths {
             if path.exists() {
                 return Ok(path);
             }
