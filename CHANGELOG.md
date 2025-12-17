@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.3.2](https://github.com/compare/v0.3.1..v0.3.2) - 2025-12-17
+
+### Bug Fixes
+
+- properly expand home directory in CLI path fallback - ([c236931](https://github.com/commit/c236931525c9e8763cc74bdaba8d2aeb6070ee9d)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([07f2d84](https://github.com/commit/07f2d84e841ddf836cbf0b3fff2ea00aea923618)) - Tyr Chen
+
+---
 ## [0.3.1](https://github.com/compare/v0.3.0..v0.3.1) - 2025-11-25
 
 ### Features
