@@ -85,40 +85,106 @@ impl SubprocessTransport {
 
     /// Find the Claude CLI executable
     fn find_cli() -> Result<PathBuf> {
-        // Try to find claude in PATH
+        // Strategy 1: Try executing 'claude' directly from PATH
+        // This is the most reliable method as it respects the shell's PATH resolution
+        if let Ok(output) = std::process::Command::new("claude")
+            .arg("--version")
+            .output()
+        {
+            if output.status.success() {
+                // 'claude' is in PATH and executable, return it as-is
+                // The OS will resolve it when we spawn the process
+                return Ok(PathBuf::from("claude"));
+            }
+        }
+
+        // Strategy 2: Use 'which' command to locate claude in PATH (Unix-like systems)
+        #[cfg(not(target_os = "windows"))]
         if let Ok(output) = std::process::Command::new("which").arg("claude").output() {
             if output.status.success() {
                 let path_str = String::from_utf8_lossy(&output.stdout);
                 let path = PathBuf::from(path_str.trim());
-                if path.exists() {
+                // Verify the path exists and is executable
+                if path.exists() && path.is_file() {
                     return Ok(path);
                 }
             }
         }
 
-        // Get home directory for path expansion
-        // Note: ~ is not expanded by PathBuf, so we need to resolve it manually
-        let home_dir = std::env::var("HOME").ok().map(PathBuf::from);
-
-        // Common installation locations (with expanded home directory)
-        let mut common_paths: Vec<PathBuf> = vec![
-            PathBuf::from("/usr/local/bin/claude"),
-            PathBuf::from("/opt/homebrew/bin/claude"),
-        ];
-
-        // Add home-relative paths if home directory is available
-        if let Some(ref home) = home_dir {
-            common_paths.push(home.join(".local/bin/claude"));
+        // Strategy 3: Use 'where' command on Windows
+        #[cfg(target_os = "windows")]
+        if let Ok(output) = std::process::Command::new("where").arg("claude").output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout);
+                // 'where' returns all matches, take the first one
+                if let Some(first_line) = path_str.lines().next() {
+                    let path = PathBuf::from(first_line.trim());
+                    if path.exists() && path.is_file() {
+                        return Ok(path);
+                    }
+                }
+            }
         }
 
+        // Strategy 4: Check common installation locations
+        // Get home directory for path expansion
+        let home_dir = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE")) // Windows fallback
+            .ok()
+            .map(PathBuf::from);
+
+        // Common installation locations
+        let mut common_paths: Vec<PathBuf> = vec![];
+
+        // Unix-like paths
+        #[cfg(not(target_os = "windows"))]
+        {
+            common_paths.extend(vec![
+                PathBuf::from("/usr/local/bin/claude"),
+                PathBuf::from("/opt/homebrew/bin/claude"),
+                PathBuf::from("/usr/bin/claude"),
+            ]);
+
+            // Add home-relative paths if home directory is available
+            if let Some(ref home) = home_dir {
+                common_paths.push(home.join(".local/bin/claude"));
+                common_paths.push(home.join("bin/claude"));
+            }
+        }
+
+        // Windows paths
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(ref home) = home_dir {
+                common_paths.extend(vec![
+                    home.join("AppData\\Local\\Programs\\Claude\\claude.exe"),
+                    home.join("AppData\\Roaming\\npm\\claude.cmd"),
+                    home.join("AppData\\Roaming\\npm\\claude.exe"),
+                ]);
+            }
+            common_paths.extend(vec![
+                PathBuf::from("C:\\Program Files\\Claude\\claude.exe"),
+                PathBuf::from("C:\\Program Files (x86)\\Claude\\claude.exe"),
+            ]);
+        }
+
+        // Check each common path
         for path in common_paths {
-            if path.exists() {
+            if path.exists() && path.is_file() {
+                return Ok(path);
+            }
+        }
+
+        // Strategy 5: Check if CLAUDE_CLI_PATH environment variable is set
+        if let Ok(cli_path) = std::env::var("CLAUDE_CLI_PATH") {
+            let path = PathBuf::from(cli_path);
+            if path.exists() && path.is_file() {
                 return Ok(path);
             }
         }
 
         Err(ClaudeError::CliNotFound(CliNotFoundError::new(
-            "Claude Code CLI not found. Please install it first.",
+            "Claude Code CLI not found. Please ensure 'claude' is in your PATH or set CLAUDE_CLI_PATH environment variable.",
             None,
         )))
     }
