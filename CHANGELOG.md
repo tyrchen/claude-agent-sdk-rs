@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.3.3](https://github.com/compare/v0.3.2..v0.3.3) - 2025-12-18
+
+### Bug Fixes
+
+- improve CLI discovery with multi-strategy approach - ([d515caf](https://github.com/commit/d515cafd2f40f8aa4eb2eed1922fe3f8aa26a4e0)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([cf42809](https://github.com/commit/cf42809790e1930fe864e1f7bce34cb20fcf0a63)) - Tyr Chen
+
+---
 ## [0.3.2](https://github.com/compare/v0.3.1..v0.3.2) - 2025-12-17
 
 ### Bug Fixes
