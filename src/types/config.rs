@@ -96,7 +96,12 @@ pub struct ClaudeAgentOptions {
     /// Custom agent definitions
     #[builder(default, setter(strip_option))]
     pub agents: Option<HashMap<String, AgentDefinition>>,
-    /// Setting sources to use
+    /// Setting sources to use.
+    ///
+    /// When `None`, the SDK does **not** load any filesystem settings,
+    /// providing isolation for SDK applications.
+    ///
+    /// Programmatic options (like `agents`, `allowed_tools`) always override filesystem settings.
     #[builder(default, setter(strip_option))]
     pub setting_sources: Option<Vec<SettingSource>>,
     /// Plugin configurations for custom plugins
@@ -185,15 +190,20 @@ pub enum PermissionMode {
     BypassPermissions,
 }
 
-/// Setting source location
+/// Controls which filesystem-based configuration sources the SDK loads settings from.
+///
+/// When multiple sources are loaded, settings are merged with this precedence (highest to lowest):
+/// 1. `Local`
+/// 2. `Project`
+/// 3. `User`
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SettingSource {
-    /// User settings
+    /// User settings from `~/.claude/settings.json`
     User,
-    /// Project settings
+    /// Project settings from `.claude/settings.json` (team-shared settings)
     Project,
-    /// Local settings
+    /// Local settings from `.claude/settings.local.json` (highest priority, git-ignored)
     Local,
 }
 
