@@ -1,8 +1,8 @@
 [package]
 name = "claude-agent-sdk-rs"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
-edition = "2021"
+edition = "2024"
 rust-version = "1.90"
 license = "MIT"
 documentation = "https://docs.rs/claude-agent-sdk-rs"

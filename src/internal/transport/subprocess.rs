@@ -62,11 +62,14 @@ impl SubprocessTransport {
     /// Create a new subprocess transport
     pub fn new(prompt: QueryPrompt, options: ClaudeAgentOptions) -> Result<Self> {
         let cli_path = if let Some(ref path) = options.cli_path {
+            tracing::info!("Using configured CLI path from options: {:?}", path);
             path.clone()
         } else {
+            tracing::info!("No CLI path in options, searching for Claude binary");
             Self::find_cli()?
         };
 
+        tracing::info!("SubprocessTransport created with CLI path: {:?}", cli_path);
         let cwd = options.cwd.clone().or_else(|| std::env::current_dir().ok());
         let max_buffer_size = options.max_buffer_size.unwrap_or(DEFAULT_MAX_BUFFER_SIZE);
 
@@ -318,7 +321,7 @@ impl SubprocessTransport {
         // Add extra args
         for (key, value) in &self.options.extra_args {
             args.push(format!("--{}", key));
-            if let Some(ref v) = value {
+            if let Some(v) = value {
                 args.push(v.clone());
             }
         }
@@ -387,6 +390,7 @@ impl Transport for SubprocessTransport {
         let env = self.build_env();
 
         // Build command
+        tracing::info!("Attempting to spawn Claude CLI at path: {:?}", self.cli_path);
         let mut cmd = Command::new(&self.cli_path);
         cmd.args(&args)
             .stdin(Stdio::piped())
@@ -395,11 +399,13 @@ impl Transport for SubprocessTransport {
             .envs(&env);
 
         if let Some(ref cwd) = self.cwd {
+            tracing::info!("Using working directory: {:?}", cwd);
             cmd.current_dir(cwd);
         }
 
         // Spawn process
         let mut child = cmd.spawn().map_err(|e| {
+            tracing::error!("Failed to spawn Claude CLI process at {:?}: {}", self.cli_path, e);
             ClaudeError::Process(ProcessError::new(
                 format!("Failed to spawn Claude CLI process: {}", e),
                 None,
@@ -419,7 +425,7 @@ impl Transport for SubprocessTransport {
         let stderr = child.stderr.take();
 
         // Spawn stderr handler if callback is provided
-        if let (Some(stderr), Some(ref callback)) = (stderr, &self.options.stderr_callback) {
+        if let (Some(stderr), Some(callback)) = (stderr, &self.options.stderr_callback) {
             let callback = Arc::clone(callback);
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr);
