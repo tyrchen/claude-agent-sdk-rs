@@ -477,6 +477,69 @@ impl ClaudeClient {
         query_guard.set_model(model).await
     }
 
+    /// Rewind tracked files to their state at a specific user message.
+    ///
+    /// This is analogous to Python's `client.rewind_files()`.
+    ///
+    /// # Requirements
+    ///
+    /// - `enable_file_checkpointing=true` in options to track file changes
+    /// - `extra_args={"replay-user-messages": None}` to receive UserMessage
+    ///   objects with `uuid` in the response stream
+    ///
+    /// # Arguments
+    ///
+    /// * `user_message_id` - UUID of the user message to rewind to. This should be
+    ///   the `uuid` field from a `UserMessage` received during the conversation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, Message};
+    /// # use std::collections::HashMap;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let options = ClaudeAgentOptions::builder()
+    ///     .enable_file_checkpointing(true)
+    ///     .extra_args(HashMap::from([("replay-user-messages".to_string(), None)]))
+    ///     .build();
+    /// let mut client = ClaudeClient::new(options);
+    /// client.connect().await?;
+    ///
+    /// client.query("Make some changes to my files").await?;
+    /// let mut checkpoint_id = None;
+    /// {
+    ///     let mut stream = client.receive_response();
+    ///     use futures::StreamExt;
+    ///     while let Some(Ok(msg)) = stream.next().await {
+    ///         if let Message::User(user_msg) = &msg {
+    ///             if let Some(uuid) = &user_msg.uuid {
+    ///                 checkpoint_id = Some(uuid.clone());
+    ///             }
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// // Later, rewind to that point
+    /// if let Some(id) = checkpoint_id {
+    ///     client.rewind_files(&id).await?;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn rewind_files(&self, user_message_id: &str) -> Result<()> {
+        let query = self.query.as_ref().ok_or_else(|| {
+            ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
+        })?;
+
+        let query_guard = query.lock().await;
+        query_guard.rewind_files(user_message_id).await
+    }
+
     /// Get server initialization info including available commands and output styles
     ///
     /// Returns initialization information from the Claude Code server including:
@@ -594,7 +657,9 @@ impl Drop for ClaudeClient {
         // Note: We can't run async code in Drop, so we can't guarantee clean shutdown
         // Users should call disconnect() explicitly
         if self.connected {
-            eprintln!("Warning: ClaudeClient dropped without calling disconnect(). Resources may not be cleaned up properly.");
+            eprintln!(
+                "Warning: ClaudeClient dropped without calling disconnect(). Resources may not be cleaned up properly."
+            );
         }
     }
 }

@@ -23,7 +23,7 @@ use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, PermissionResult,
     PermissionResultDeny, ToolPermissionContext,
 };
-use futures::{future::BoxFuture, FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt, future::BoxFuture};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -83,39 +83,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("   Tool: {}", tool_name);
 
                 // Policy 1: Block dangerous file operations
-                if tool_name == "Write" {
-                    if let Some(file_path) = tool_input.get("file_path").and_then(|v| v.as_str()) {
-                        let dangerous_paths = vec!["/etc/", "/sys/", "/boot/", "~/.ssh/"];
-                        for path in &dangerous_paths {
-                            if file_path.starts_with(path) {
-                                println!("   ❌ DENIED: Dangerous file path");
-                                return PermissionResult::Deny(PermissionResultDeny {
-                                    message: format!(
-                                        "Writing to {} is not allowed for security reasons",
-                                        path
-                                    ),
-                                    interrupt: false,
-                                });
-                            }
+                if tool_name == "Write"
+                    && let Some(file_path) = tool_input.get("file_path").and_then(|v| v.as_str())
+                {
+                    let dangerous_paths = vec!["/etc/", "/sys/", "/boot/", "~/.ssh/"];
+                    for path in &dangerous_paths {
+                        if file_path.starts_with(path) {
+                            println!("   ❌ DENIED: Dangerous file path");
+                            return PermissionResult::Deny(PermissionResultDeny {
+                                message: format!(
+                                    "Writing to {} is not allowed for security reasons",
+                                    path
+                                ),
+                                interrupt: false,
+                            });
                         }
                     }
                 }
 
                 // Policy 2: Block destructive bash commands
-                if tool_name == "Bash" {
-                    if let Some(command) = tool_input.get("command").and_then(|v| v.as_str()) {
-                        let dangerous_patterns = vec!["rm -rf /", "mkfs", "dd if=", "> /dev/"];
-                        for pattern in &dangerous_patterns {
-                            if command.contains(pattern) {
-                                println!("   ❌ DENIED: Dangerous bash command");
-                                return PermissionResult::Deny(PermissionResultDeny {
-                                    message: format!(
-                                        "Command contains dangerous pattern: {}",
-                                        pattern
-                                    ),
-                                    interrupt: false,
-                                });
-                            }
+                if tool_name == "Bash"
+                    && let Some(command) = tool_input.get("command").and_then(|v| v.as_str())
+                {
+                    let dangerous_patterns = vec!["rm -rf /", "mkfs", "dd if=", "> /dev/"];
+                    for pattern in &dangerous_patterns {
+                        if command.contains(pattern) {
+                            println!("   ❌ DENIED: Dangerous bash command");
+                            return PermissionResult::Deny(PermissionResultDeny {
+                                message: format!("Command contains dangerous pattern: {}", pattern),
+                                interrupt: false,
+                            });
                         }
                     }
                 }
@@ -179,10 +176,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match message? {
             Message::Assistant(msg) => {
                 for block in msg.message.content {
-                    if let ContentBlock::Text(text) = block {
-                        if !text.text.trim().is_empty() {
-                            println!("💬 Claude: {}", text.text);
-                        }
+                    if let ContentBlock::Text(text) = block
+                        && !text.text.trim().is_empty()
+                    {
+                        println!("💬 Claude: {}", text.text);
                     }
                 }
             }

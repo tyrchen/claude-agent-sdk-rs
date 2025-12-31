@@ -20,8 +20,8 @@
 //! ```
 
 use claude_agent_sdk_rs::{
-    create_sdk_mcp_server, tool, ClaudeAgentOptions, ClaudeClient, ContentBlock, McpServers,
-    McpToolResultContent, Message, ToolResult,
+    ClaudeAgentOptions, ClaudeClient, ContentBlock, McpServers, McpToolResultContent, Message,
+    ToolResult, create_sdk_mcp_server, tool,
 };
 use futures::StreamExt;
 use serde_json::json;
@@ -60,7 +60,7 @@ async fn calculator_handler(args: serde_json::Value) -> anyhow::Result<ToolResul
                     text: format!("Error: Unknown operation '{}'", operation),
                 }],
                 is_error: true,
-            })
+            });
         }
     };
 
@@ -283,12 +283,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Tool results come as User messages
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
-                        if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
+                        if let ContentBlock::ToolResult(result) = content
+                            && let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
-                            {
-                                println!("📊 Tool result: {}", text);
-                            }
+                        {
+                            println!("📊 Tool result: {}", text);
                         }
                     }
                 }
@@ -332,12 +331,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Tool results come as User messages
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
-                        if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
+                        if let ContentBlock::ToolResult(result) = content
+                            && let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
-                            {
-                                println!("📊 Tool result: {}", text);
-                            }
+                        {
+                            println!("📊 Tool result: {}", text);
                         }
                     }
                 }
@@ -381,12 +379,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Tool results come as User messages
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
-                        if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
+                        if let ContentBlock::ToolResult(result) = content
+                            && let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
-                            {
-                                println!("📊 Tool result: {}", text);
-                            }
+                        {
+                            println!("📊 Tool result: {}", text);
                         }
                     }
                 }
@@ -430,12 +427,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Tool results come as User messages
                 if let Some(content_blocks) = &user_msg.content {
                     for content in content_blocks {
-                        if let ContentBlock::ToolResult(result) = content {
-                            if let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
+                        if let ContentBlock::ToolResult(result) = content
+                            && let Some(claude_agent_sdk_rs::ToolResultContent::Text(text)) =
                                 &result.content
-                            {
-                                println!("📊 Tool result: {}", text);
-                            }
+                        {
+                            println!("📊 Tool result: {}", text);
                         }
                     }
                 }

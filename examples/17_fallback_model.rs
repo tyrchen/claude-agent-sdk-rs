@@ -11,7 +11,7 @@
 //! This feature is important for production applications that need reliability and
 //! automatic failover when a model is experiencing issues.
 
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, ContentBlock, Message, PermissionMode};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, PermissionMode, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

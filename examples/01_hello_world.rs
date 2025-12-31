@@ -8,7 +8,7 @@
 //! 2. Saves it to ./fixtures/hello.py
 //! 3. Runs the script to verify it works
 
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, ContentBlock, Message};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

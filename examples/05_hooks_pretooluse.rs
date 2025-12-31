@@ -136,7 +136,9 @@ async fn main() -> anyhow::Result<()> {
     println!("Connecting to Claude...\n");
     client.connect().await?;
 
-    println!("Sending query: 'Make a plan for writing a simple Python script that greets the user, and execute the plan to ./fixtures/greet.py'...\n");
+    println!(
+        "Sending query: 'Make a plan for writing a simple Python script that greets the user, and execute the plan to ./fixtures/greet.py'...\n"
+    );
     client
         .query("Write a simple Python script to ./fixtures/greet.py that greets the user")
         .await?;

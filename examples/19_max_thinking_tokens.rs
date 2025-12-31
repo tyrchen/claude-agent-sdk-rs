@@ -17,7 +17,7 @@
 //! - Multi-step analysis
 //! - Cost control for thinking overhead
 
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, ContentBlock, Message, PermissionMode};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, PermissionMode, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -198,15 +198,14 @@ async fn example_project_and_user() -> anyhow::Result<()> {
 }
 
 fn extract_slash_commands(msg: &SystemMessage) -> Vec<String> {
-    if msg.subtype == "init" {
-        if let Some(commands) = msg.data.get("slash_commands") {
-            if let Some(arr) = commands.as_array() {
-                return arr
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
-            }
-        }
+    if msg.subtype == "init"
+        && let Some(commands) = msg.data.get("slash_commands")
+        && let Some(arr) = commands.as_array()
+    {
+        return arr
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
     }
     Vec::new()
 }

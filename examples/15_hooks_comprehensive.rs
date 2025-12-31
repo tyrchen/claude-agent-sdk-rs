@@ -439,7 +439,9 @@ async fn example_posttooluse() -> anyhow::Result<()> {
 /// Example 4: Permission decision with allow/deny
 async fn example_decision_fields() -> anyhow::Result<()> {
     println!("=== Permission Decision Example ===");
-    println!("This example shows how to use permissionDecision='allow'/'deny' with reason and systemMessage.\n");
+    println!(
+        "This example shows how to use permissionDecision='allow'/'deny' with reason and systemMessage.\n"
+    );
 
     let mut hooks: HashMap<HookEvent, Vec<HookMatcher>> = HashMap::new();
 

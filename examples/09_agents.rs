@@ -9,7 +9,7 @@
 //! 3. Demonstrates using multiple agents in a single session
 
 use claude_agent_sdk_rs::{
-    query, AgentDefinition, AgentModel, ClaudeAgentOptions, ContentBlock, Message, SettingSource,
+    AgentDefinition, AgentModel, ClaudeAgentOptions, ContentBlock, Message, SettingSource, query,
 };
 use std::collections::HashMap;
 
@@ -156,10 +156,10 @@ fn display_messages(messages: &[Message]) {
                 }
             }
             Message::Result(result) => {
-                if let Some(cost) = result.total_cost_usd {
-                    if cost > 0.0 {
-                        println!("\nCost: ${:.4}", cost);
-                    }
+                if let Some(cost) = result.total_cost_usd
+                    && cost > 0.0
+                {
+                    println!("\nCost: ${:.4}", cost);
                 }
             }
             _ => {}

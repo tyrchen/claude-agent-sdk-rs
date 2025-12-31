@@ -19,7 +19,7 @@
 //! - Simpler code when memory isn't a concern
 
 use claude_agent_sdk_rs::{
-    query_stream, ClaudeAgentOptions, ContentBlock, Message, PermissionMode,
+    ClaudeAgentOptions, ContentBlock, Message, PermissionMode, query_stream,
 };
 use futures::stream::StreamExt;
 

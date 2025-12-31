@@ -16,7 +16,7 @@
 //! - Package reusable functionality for multiple projects
 
 use claude_agent_sdk_rs::{
-    query, ClaudeAgentOptions, ContentBlock, Message, PermissionMode, SdkPluginConfig,
+    ClaudeAgentOptions, ContentBlock, Message, PermissionMode, SdkPluginConfig, query,
 };
 
 #[tokio::main]

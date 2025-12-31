@@ -9,7 +9,7 @@
 //! 2. Only allows the Write tool (not Edit)
 //! 3. Shows that Claude can create files but cannot edit them
 
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, ContentBlock, Message};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

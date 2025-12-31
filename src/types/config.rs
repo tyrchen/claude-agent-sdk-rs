@@ -15,6 +15,9 @@ use super::plugin::SdkPluginConfig;
 #[derive(Clone, TypedBuilder)]
 #[builder(doc)]
 pub struct ClaudeAgentOptions {
+    /// Tools configuration (list of tool names or preset)
+    #[builder(default, setter(strip_option))]
+    pub tools: Option<Tools>,
     /// List of allowed tool names
     #[builder(default, setter(into))]
     pub allowed_tools: Vec<String>,
@@ -45,6 +48,10 @@ pub struct ClaudeAgentOptions {
     /// Fallback model to use if primary model fails
     #[builder(default, setter(into, strip_option))]
     pub fallback_model: Option<String>,
+    /// Beta features to enable
+    /// See https://docs.anthropic.com/en/api/beta-headers
+    #[builder(default, setter(into))]
+    pub betas: Vec<SdkBeta>,
     /// Maximum budget in USD for the conversation
     #[builder(default, setter(strip_option))]
     pub max_budget_usd: Option<f64>,
@@ -99,6 +106,11 @@ pub struct ClaudeAgentOptions {
     /// Setting sources to use
     #[builder(default, setter(strip_option))]
     pub setting_sources: Option<Vec<SettingSource>>,
+    /// Sandbox configuration for bash command isolation
+    /// Filesystem and network restrictions are derived from permission rules (Read/Edit/WebFetch),
+    /// not from these sandbox settings.
+    #[builder(default, setter(strip_option))]
+    pub sandbox: Option<SandboxSettings>,
     /// Plugin configurations for custom plugins
     #[builder(default, setter(into))]
     pub plugins: Vec<SdkPluginConfig>,
@@ -106,6 +118,11 @@ pub struct ClaudeAgentOptions {
     /// Example: `json!({"type": "json_schema", "schema": {"type": "object", "properties": {...}}})`
     #[builder(default, setter(strip_option))]
     pub output_format: Option<serde_json::Value>,
+    /// Enable file checkpointing to track file changes during the session.
+    /// When enabled, files can be rewound to their state at any user message
+    /// using `ClaudeClient.rewind_files()`.
+    #[builder(default = false)]
+    pub enable_file_checkpointing: bool,
 }
 
 impl Default for ClaudeAgentOptions {
@@ -229,4 +246,156 @@ pub enum AgentModel {
     Haiku,
     /// Inherit from parent
     Inherit,
+}
+
+/// SDK Beta features
+/// See https://docs.anthropic.com/en/api/beta-headers
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SdkBeta {
+    /// Extended context window (1M tokens)
+    #[serde(rename = "context-1m-2025-08-07")]
+    Context1M,
+}
+
+/// Tools configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Tools {
+    /// List of tool names
+    List(Vec<String>),
+    /// Preset configuration
+    Preset(ToolsPreset),
+}
+
+/// Tools preset configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolsPreset {
+    /// Type field (always "preset")
+    #[serde(rename = "type")]
+    pub type_: String,
+    /// Preset name (e.g., "claude_code")
+    pub preset: String,
+}
+
+impl ToolsPreset {
+    /// Create a new tools preset
+    pub fn new(preset: impl Into<String>) -> Self {
+        Self {
+            type_: "preset".to_string(),
+            preset: preset.into(),
+        }
+    }
+
+    /// Create the default claude_code preset
+    pub fn claude_code() -> Self {
+        Self::new("claude_code")
+    }
+}
+
+/// Network configuration for sandbox
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TypedBuilder)]
+#[builder(doc)]
+pub struct SandboxNetworkConfig {
+    /// Unix socket paths accessible in sandbox (e.g., SSH agents)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "allowUnixSockets")]
+    #[builder(default, setter(into, strip_option))]
+    pub allow_unix_sockets: Option<Vec<String>>,
+
+    /// Allow all Unix sockets (less secure)
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "allowAllUnixSockets"
+    )]
+    #[builder(default, setter(strip_option))]
+    pub allow_all_unix_sockets: Option<bool>,
+
+    /// Allow binding to localhost ports (macOS only)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "allowLocalBinding")]
+    #[builder(default, setter(strip_option))]
+    pub allow_local_binding: Option<bool>,
+
+    /// HTTP proxy port if bringing your own proxy
+    #[serde(skip_serializing_if = "Option::is_none", rename = "httpProxyPort")]
+    #[builder(default, setter(strip_option))]
+    pub http_proxy_port: Option<u16>,
+
+    /// SOCKS5 proxy port if bringing your own proxy
+    #[serde(skip_serializing_if = "Option::is_none", rename = "socksProxyPort")]
+    #[builder(default, setter(strip_option))]
+    pub socks_proxy_port: Option<u16>,
+}
+
+/// Violations to ignore in sandbox
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TypedBuilder)]
+#[builder(doc)]
+pub struct SandboxIgnoreViolations {
+    /// File paths for which violations should be ignored
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[builder(default, setter(into, strip_option))]
+    pub file: Option<Vec<String>>,
+
+    /// Network hosts for which violations should be ignored
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[builder(default, setter(into, strip_option))]
+    pub network: Option<Vec<String>>,
+}
+
+/// Sandbox settings configuration
+///
+/// Controls how Claude Code sandboxes bash commands for filesystem
+/// and network isolation.
+///
+/// **Important:** Filesystem and network restrictions are configured via permission
+/// rules, not via these sandbox settings:
+/// - Filesystem read restrictions: Use Read deny rules
+/// - Filesystem write restrictions: Use Edit allow/deny rules
+/// - Network restrictions: Use WebFetch allow/deny rules
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TypedBuilder)]
+#[builder(doc)]
+pub struct SandboxSettings {
+    /// Enable bash sandboxing (macOS/Linux only). Default: False
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[builder(default, setter(strip_option))]
+    pub enabled: Option<bool>,
+
+    /// Auto-approve bash commands when sandboxed. Default: True
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "autoAllowBashIfSandboxed"
+    )]
+    #[builder(default, setter(strip_option))]
+    pub auto_allow_bash_if_sandboxed: Option<bool>,
+
+    /// Commands that should run outside the sandbox (e.g., ["git", "docker"])
+    #[serde(skip_serializing_if = "Option::is_none", rename = "excludedCommands")]
+    #[builder(default, setter(into, strip_option))]
+    pub excluded_commands: Option<Vec<String>>,
+
+    /// Allow commands to bypass sandbox via dangerouslyDisableSandbox.
+    /// When False, all commands must run sandboxed (or be in excludedCommands). Default: True
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "allowUnsandboxedCommands"
+    )]
+    #[builder(default, setter(strip_option))]
+    pub allow_unsandboxed_commands: Option<bool>,
+
+    /// Network configuration for sandbox
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[builder(default, setter(strip_option))]
+    pub network: Option<SandboxNetworkConfig>,
+
+    /// Violations to ignore
+    #[serde(skip_serializing_if = "Option::is_none", rename = "ignoreViolations")]
+    #[builder(default, setter(strip_option))]
+    pub ignore_violations: Option<SandboxIgnoreViolations>,
+
+    /// Enable weaker sandbox for unprivileged Docker environments
+    /// (Linux only). Reduces security. Default: False
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "enableWeakerNestedSandbox"
+    )]
+    #[builder(default, setter(strip_option))]
+    pub enable_weaker_nested_sandbox: Option<bool>,
 }

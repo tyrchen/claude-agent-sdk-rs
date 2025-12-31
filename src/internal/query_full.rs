@@ -3,10 +3,10 @@
 use futures::stream::StreamExt;
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
@@ -463,6 +463,26 @@ impl QueryFull {
         let request = json!({
             "subtype": "set_model",
             "model": model
+        });
+
+        self.send_control_request(request).await?;
+        Ok(())
+    }
+
+    /// Rewind tracked files to their state at a specific user message.
+    ///
+    /// Requires:
+    /// - `enable_file_checkpointing=true` to track file changes
+    /// - `extra_args={"replay-user-messages": None}` to receive UserMessage
+    ///   objects with `uuid` in the response stream
+    ///
+    /// # Arguments
+    /// * `user_message_id` - UUID of the user message to rewind to. This should be
+    ///   the `uuid` field from a `UserMessage` received during the conversation.
+    pub async fn rewind_files(&self, user_message_id: &str) -> Result<()> {
+        let request = json!({
+            "subtype": "rewind_files",
+            "user_message_id": user_message_id
         });
 
         self.send_control_request(request).await?;

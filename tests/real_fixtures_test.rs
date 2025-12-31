@@ -125,10 +125,12 @@ fn test_real_user_001_tool_result() {
             // Should have tool_result
             assert_eq!(content[0]["type"], "tool_result");
             assert!(content[0]["tool_use_id"].is_string());
-            assert!(content[0]["tool_use_id"]
-                .as_str()
-                .unwrap()
-                .starts_with("toolu_"));
+            assert!(
+                content[0]["tool_use_id"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("toolu_")
+            );
         }
         _ => panic!("Expected User message"),
     }

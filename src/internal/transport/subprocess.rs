@@ -17,7 +17,7 @@ use crate::errors::{
 };
 use crate::types::config::ClaudeAgentOptions;
 use crate::version::{
-    check_version, ENTRYPOINT, MIN_CLI_VERSION, SDK_VERSION, SKIP_VERSION_CHECK_ENV,
+    ENTRYPOINT, MIN_CLI_VERSION, SDK_VERSION, SKIP_VERSION_CHECK_ENV, check_version,
 };
 
 use super::Transport;
@@ -90,24 +90,23 @@ impl SubprocessTransport {
         if let Ok(output) = std::process::Command::new("claude")
             .arg("--version")
             .output()
+            && output.status.success()
         {
-            if output.status.success() {
-                // 'claude' is in PATH and executable, return it as-is
-                // The OS will resolve it when we spawn the process
-                return Ok(PathBuf::from("claude"));
-            }
+            // 'claude' is in PATH and executable, return it as-is
+            // The OS will resolve it when we spawn the process
+            return Ok(PathBuf::from("claude"));
         }
 
         // Strategy 2: Use 'which' command to locate claude in PATH (Unix-like systems)
         #[cfg(not(target_os = "windows"))]
-        if let Ok(output) = std::process::Command::new("which").arg("claude").output() {
-            if output.status.success() {
-                let path_str = String::from_utf8_lossy(&output.stdout);
-                let path = PathBuf::from(path_str.trim());
-                // Verify the path exists and is executable
-                if path.exists() && path.is_file() {
-                    return Ok(path);
-                }
+        if let Ok(output) = std::process::Command::new("which").arg("claude").output()
+            && output.status.success()
+        {
+            let path_str = String::from_utf8_lossy(&output.stdout);
+            let path = PathBuf::from(path_str.trim());
+            // Verify the path exists and is executable
+            if path.exists() && path.is_file() {
+                return Ok(path);
             }
         }
 
@@ -226,6 +225,26 @@ impl SubprocessTransport {
             }
         }
 
+        // Add tools configuration
+        if let Some(ref tools) = self.options.tools {
+            match tools {
+                crate::types::config::Tools::List(tool_list) => {
+                    if tool_list.is_empty() {
+                        args.push("--tools".to_string());
+                        args.push(String::new());
+                    } else {
+                        args.push("--tools".to_string());
+                        args.push(tool_list.join(","));
+                    }
+                }
+                crate::types::config::Tools::Preset(_) => {
+                    // Preset object - 'claude_code' preset maps to 'default'
+                    args.push("--tools".to_string());
+                    args.push("default".to_string());
+                }
+            }
+        }
+
         // Add permission mode
         if let Some(mode) = self.options.permission_mode {
             let mode_str = match mode {
@@ -238,16 +257,16 @@ impl SubprocessTransport {
             args.push(mode_str.to_string());
         }
 
-        // Add allowed tools
-        for tool in &self.options.allowed_tools {
-            args.push("--allowed-tools".to_string());
-            args.push(tool.clone());
+        // Add allowed tools (Python SDK uses --allowedTools with comma-separated values)
+        if !self.options.allowed_tools.is_empty() {
+            args.push("--allowedTools".to_string());
+            args.push(self.options.allowed_tools.join(","));
         }
 
-        // Add disallowed tools
-        for tool in &self.options.disallowed_tools {
-            args.push("--disallowed-tools".to_string());
-            args.push(tool.clone());
+        // Add disallowed tools (Python SDK uses --disallowedTools with comma-separated values)
+        if !self.options.disallowed_tools.is_empty() {
+            args.push("--disallowedTools".to_string());
+            args.push(self.options.disallowed_tools.join(","));
         }
 
         // Add model
@@ -262,6 +281,20 @@ impl SubprocessTransport {
             args.push(fallback_model.clone());
         }
 
+        // Add beta features
+        if !self.options.betas.is_empty() {
+            let betas: Vec<String> = self
+                .options
+                .betas
+                .iter()
+                .map(|b| match b {
+                    crate::types::config::SdkBeta::Context1M => "context-1m-2025-08-07".to_string(),
+                })
+                .collect();
+            args.push("--betas".to_string());
+            args.push(betas.join(","));
+        }
+
         // Add max budget USD
         if let Some(max_budget) = self.options.max_budget_usd {
             args.push("--max-budget-usd".to_string());
@@ -274,15 +307,20 @@ impl SubprocessTransport {
             args.push(max_thinking.to_string());
         }
 
+        // Add permission prompt tool name
+        if let Some(ref tool_name) = self.options.permission_prompt_tool_name {
+            args.push("--permission-prompt-tool".to_string());
+            args.push(tool_name.clone());
+        }
+
         // Add output format (structured outputs / JSON schema)
         // Expected format: {"type": "json_schema", "schema": {...}}
-        if let Some(ref output_format) = self.options.output_format {
-            if output_format.get("type") == Some(&serde_json::json!("json_schema")) {
-                if let Some(schema) = output_format.get("schema") {
-                    args.push("--json-schema".to_string());
-                    args.push(schema.to_string());
-                }
-            }
+        if let Some(ref output_format) = self.options.output_format
+            && output_format.get("type") == Some(&serde_json::json!("json_schema"))
+            && let Some(schema) = output_format.get("schema")
+        {
+            args.push("--json-schema".to_string());
+            args.push(schema.to_string());
         }
 
         // Add max turns
@@ -299,12 +337,53 @@ impl SubprocessTransport {
 
         // Add continue conversation
         if self.options.continue_conversation {
-            args.push("--continue-conversation".to_string());
+            args.push("--continue".to_string());
+        }
+
+        // Add settings (combined with sandbox if both are provided)
+        let settings_value = self.build_settings_value();
+        if let Some(ref settings) = settings_value {
+            args.push("--settings".to_string());
+            args.push(settings.clone());
+        }
+
+        // Add additional directories
+        for dir in &self.options.add_dirs {
+            args.push("--add-dir".to_string());
+            args.push(dir.display().to_string());
+        }
+
+        // Add include partial messages
+        if self.options.include_partial_messages {
+            args.push("--include-partial-messages".to_string());
         }
 
         // Add fork session
         if self.options.fork_session {
             args.push("--fork-session".to_string());
+        }
+
+        // Add agent definitions
+        if let Some(ref agents) = self.options.agents
+            && !agents.is_empty()
+        {
+            let agents_json = serde_json::to_string(agents).unwrap_or_default();
+            args.push("--agents".to_string());
+            args.push(agents_json);
+        }
+
+        // Add setting sources
+        if let Some(ref sources) = self.options.setting_sources {
+            let sources_str: Vec<&str> = sources
+                .iter()
+                .map(|s| match s {
+                    crate::types::config::SettingSource::User => "user",
+                    crate::types::config::SettingSource::Project => "project",
+                    crate::types::config::SettingSource::Local => "local",
+                })
+                .collect();
+            args.push("--setting-sources".to_string());
+            args.push(sources_str.join(","));
         }
 
         // Add plugins
@@ -318,12 +397,65 @@ impl SubprocessTransport {
         // Add extra args
         for (key, value) in &self.options.extra_args {
             args.push(format!("--{}", key));
-            if let Some(ref v) = value {
+            if let Some(v) = value {
                 args.push(v.clone());
             }
         }
 
         args
+    }
+
+    /// Build settings value, merging sandbox settings if provided.
+    ///
+    /// Returns the settings value as either:
+    /// - A JSON string (if sandbox is provided or settings is JSON)
+    /// - A file path (if only settings path is provided without sandbox)
+    /// - None if neither settings nor sandbox is provided
+    fn build_settings_value(&self) -> Option<String> {
+        let has_settings = self.options.settings.is_some();
+        let has_sandbox = self.options.sandbox.is_some();
+
+        if !has_settings && !has_sandbox {
+            return None;
+        }
+
+        // If only settings path and no sandbox, pass through as-is
+        if has_settings && !has_sandbox {
+            return self.options.settings.clone();
+        }
+
+        // If we have sandbox settings, we need to merge into a JSON object
+        let mut settings_obj = serde_json::Map::new();
+
+        if let Some(settings_str) = &self.options.settings {
+            let trimmed = settings_str.trim();
+            // Check if settings is a JSON string or a file path
+            if trimmed.starts_with('{') && trimmed.ends_with('}') {
+                // Parse JSON string
+                if let Ok(serde_json::Value::Object(obj)) =
+                    serde_json::from_str::<serde_json::Value>(trimmed)
+                {
+                    settings_obj = obj;
+                }
+            } else {
+                // It's a file path - try to read and parse
+                if let Ok(content) = std::fs::read_to_string(trimmed)
+                    && let Ok(serde_json::Value::Object(obj)) =
+                        serde_json::from_str::<serde_json::Value>(&content)
+                {
+                    settings_obj = obj;
+                }
+            }
+        }
+
+        // Merge sandbox settings
+        if let Some(sandbox) = &self.options.sandbox
+            && let Ok(sandbox_value) = serde_json::to_value(sandbox)
+        {
+            settings_obj.insert("sandbox".to_string(), sandbox_value);
+        }
+
+        Some(serde_json::to_string(&serde_json::Value::Object(settings_obj)).unwrap_or_default())
     }
 
     /// Check Claude CLI version
@@ -372,6 +504,15 @@ impl SubprocessTransport {
             "CLAUDE_AGENT_SDK_VERSION".to_string(),
             SDK_VERSION.to_string(),
         );
+
+        // Enable file checkpointing if requested
+        if self.options.enable_file_checkpointing {
+            env.insert(
+                "CLAUDE_CODE_ENABLE_SDK_FILE_CHECKPOINTING".to_string(),
+                "true".to_string(),
+            );
+        }
+
         env
     }
 }
@@ -419,7 +560,7 @@ impl Transport for SubprocessTransport {
         let stderr = child.stderr.take();
 
         // Spawn stderr handler if callback is provided
-        if let (Some(stderr), Some(ref callback)) = (stderr, &self.options.stderr_callback) {
+        if let (Some(stderr), Some(callback)) = (stderr, &self.options.stderr_callback) {
             let callback = Arc::clone(callback);
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr);

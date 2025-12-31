@@ -144,11 +144,13 @@ mod tests {
     #[test]
     fn test_plugin_with_home_directory() {
         let plugin = SdkPluginConfig::local("~/my-plugin");
-        assert!(plugin
-            .path()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .contains("my-plugin"));
+        assert!(
+            plugin
+                .path()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains("my-plugin")
+        );
     }
 }

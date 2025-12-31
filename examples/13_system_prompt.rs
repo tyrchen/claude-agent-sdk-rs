@@ -11,7 +11,7 @@
 //! --append-system-prompt to extend the default prompt.
 
 use claude_agent_sdk_rs::{
-    query, ClaudeAgentOptions, ContentBlock, Message, SystemPrompt, SystemPromptPreset,
+    ClaudeAgentOptions, ContentBlock, Message, SystemPrompt, SystemPromptPreset, query,
 };
 
 #[tokio::main]

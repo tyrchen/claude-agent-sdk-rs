@@ -270,12 +270,11 @@ async fn example_bash_command() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         ContentBlock::ToolUse(tool_use) => {
                             println!("Tool Use: {} (id: {})", tool_use.name, tool_use.id);
-                            if tool_use.name == "Bash" {
-                                if let Some(command) = tool_use.input.get("command") {
-                                    if let Some(cmd_str) = command.as_str() {
-                                        println!("  Command: {}", cmd_str);
-                                    }
-                                }
+                            if tool_use.name == "Bash"
+                                && let Some(command) = tool_use.input.get("command")
+                                && let Some(cmd_str) = command.as_str()
+                            {
+                                println!("  Command: {}", cmd_str);
                             }
                         }
                         _ => {}
@@ -320,33 +319,33 @@ async fn example_control_protocol() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(info) = server_info {
         println!("✓ Server info retrieved successfully!");
-        if let Some(commands) = info.get("commands") {
-            if let Some(commands_array) = commands.as_array() {
-                println!("  - Available commands: {}", commands_array.len());
-            }
+        if let Some(commands) = info.get("commands")
+            && let Some(commands_array) = commands.as_array()
+        {
+            println!("  - Available commands: {}", commands_array.len());
         }
         if let Some(output_style) = info.get("output_style") {
             println!("  - Output style: {}", output_style);
         }
 
         // Show available output styles if present
-        if let Some(styles) = info.get("available_output_styles") {
-            if let Some(styles_array) = styles.as_array() {
-                let style_names: Vec<_> = styles_array.iter().filter_map(|s| s.as_str()).collect();
-                println!("  - Available output styles: {}", style_names.join(", "));
-            }
+        if let Some(styles) = info.get("available_output_styles")
+            && let Some(styles_array) = styles.as_array()
+        {
+            let style_names: Vec<_> = styles_array.iter().filter_map(|s| s.as_str()).collect();
+            println!("  - Available output styles: {}", style_names.join(", "));
         }
 
         // Show a few example commands
-        if let Some(commands) = info.get("commands") {
-            if let Some(commands_array) = commands.as_array() {
-                println!("  - Example commands:");
-                for cmd in commands_array.iter().take(5) {
-                    if let Some(name) = cmd.get("name") {
-                        if let Some(name_str) = name.as_str() {
-                            println!("    • {}", name_str);
-                        }
-                    }
+        if let Some(commands) = info.get("commands")
+            && let Some(commands_array) = commands.as_array()
+        {
+            println!("  - Example commands:");
+            for cmd in commands_array.iter().take(5) {
+                if let Some(name) = cmd.get("name")
+                    && let Some(name_str) = name.as_str()
+                {
+                    println!("    • {}", name_str);
                 }
             }
         }

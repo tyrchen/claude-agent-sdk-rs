@@ -14,7 +14,7 @@
 //! - Testing with budget constraints
 //! - Preventing unexpected API charges
 
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, ContentBlock, Message, PermissionMode};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, PermissionMode, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

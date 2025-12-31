@@ -8,7 +8,7 @@
 //! 2. Tracks all tool uses
 //! 3. Prints detailed information about each tool invocation
 
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, ContentBlock, Message};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, query};
 use std::collections::HashMap;
 
 #[tokio::main]

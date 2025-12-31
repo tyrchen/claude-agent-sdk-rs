@@ -53,6 +53,9 @@ pub struct UserMessage {
     /// Message content blocks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Vec<ContentBlock>>,
+    /// UUID for file checkpointing (used with enable_file_checkpointing and rewind_files)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uuid: Option<String>,
     /// Parent tool use ID (if this is a tool result)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_tool_use_id: Option<String>,
