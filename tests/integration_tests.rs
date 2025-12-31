@@ -753,3 +753,64 @@ async fn test_multiple_plugins() -> anyhow::Result<()> {
     println!("✓ Multiple plugin configuration test passed (SDK level)");
     Ok(())
 }
+
+/// Test that invalid cwd produces a clear error message
+#[tokio::test]
+async fn test_invalid_cwd_error() -> anyhow::Result<()> {
+    use std::path::Path;
+
+    // Test with non-existent directory
+    let options = ClaudeAgentOptions::builder()
+        .cwd(Path::new("/nonexistent/path/that/does/not/exist"))
+        .max_turns(1)
+        .build();
+
+    let mut client = ClaudeClient::new(options);
+    let result = client.connect().await;
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    // Should contain a clear error message about the directory
+    assert!(
+        err_msg.contains("Working directory does not exist"),
+        "Error message should mention 'Working directory does not exist', got: {}",
+        err_msg
+    );
+    assert!(
+        err_msg.contains("/nonexistent/path"),
+        "Error message should contain the path, got: {}",
+        err_msg
+    );
+
+    Ok(())
+}
+
+/// Test that cwd pointing to a file produces a clear error
+#[tokio::test]
+async fn test_cwd_is_file_error() -> anyhow::Result<()> {
+    use std::path::Path;
+
+    // Use Cargo.toml as a file that exists but is not a directory
+    let options = ClaudeAgentOptions::builder()
+        .cwd(Path::new("./Cargo.toml"))
+        .max_turns(1)
+        .build();
+
+    let mut client = ClaudeClient::new(options);
+    let result = client.connect().await;
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+
+    // Should contain a clear error message about not being a directory
+    assert!(
+        err_msg.contains("not a directory"),
+        "Error message should mention 'not a directory', got: {}",
+        err_msg
+    );
+
+    Ok(())
+}

@@ -125,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
     let options = ClaudeAgentOptions::builder()
         .allowed_tools(vec!["Write".to_string(), "Bash".to_string()])
         .permission_mode(claude_agent_sdk_rs::PermissionMode::AcceptEdits)
-        .cwd(Path::new("/tmp/todo"))
+        .cwd(Path::new("./fixtures"))
         .hooks(hooks.build())
         .build();
 

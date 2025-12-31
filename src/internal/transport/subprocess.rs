@@ -520,6 +520,22 @@ impl SubprocessTransport {
 #[async_trait]
 impl Transport for SubprocessTransport {
     async fn connect(&mut self) -> Result<()> {
+        // Validate cwd exists before spawning
+        if let Some(ref cwd) = self.cwd {
+            if !cwd.exists() {
+                return Err(ClaudeError::InvalidConfig(format!(
+                    "Working directory does not exist: {}. Please ensure the directory exists before connecting.",
+                    cwd.display()
+                )));
+            }
+            if !cwd.is_dir() {
+                return Err(ClaudeError::InvalidConfig(format!(
+                    "Working directory path is not a directory: {}",
+                    cwd.display()
+                )));
+            }
+        }
+
         // Check version
         self.check_claude_version().await?;
 
