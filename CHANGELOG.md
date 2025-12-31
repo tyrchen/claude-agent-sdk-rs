@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file. See [conven
 ### Other
 
 - Update CHANGELOG.md - ([40cd771](https://github.com/commit/40cd771e58dc3a88b5c78cd8365ff3e6f0f2d2ed)) - Tyr Chen
+- Update CHANGELOG.md - ([408e0f8](https://github.com/commit/408e0f88a0e958d53c197cb993005e8d1c548170)) - Tyr Chen
 
 ---
 ## [0.3.3](https://github.com/compare/v0.3.2..v0.3.3) - 2025-12-18
