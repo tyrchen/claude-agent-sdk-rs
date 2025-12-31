@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.4.0](https://github.com/compare/v0.3.3..v0.4.0) - 2025-12-31
+
+### Bug Fixes
+
+- improve cwd validation with clear error messages - ([4099980](https://github.com/commit/409998004620d4dbd023805d264b660d14bd7012)) - Tyr Chen
+
+### Features
+
+- achieve full feature parity with Python SDK (v0.4.0) - ([ab2fce9](https://github.com/commit/ab2fce9f26d4f33386c951389d39966e31690148)) - Tyr Chen
+
+### Miscellaneous Chores
+
+- update Python SDK submodule to latest - ([6fbab8d](https://github.com/commit/6fbab8d3e9a9c7578a3213a78e18f1ba7d4886b2)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([40cd771](https://github.com/commit/40cd771e58dc3a88b5c78cd8365ff3e6f0f2d2ed)) - Tyr Chen
+
+---
 ## [0.3.3](https://github.com/compare/v0.3.2..v0.3.3) - 2025-12-18
 
 ### Bug Fixes
