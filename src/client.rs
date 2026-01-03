@@ -13,7 +13,7 @@ use crate::internal::transport::subprocess::QueryPrompt;
 use crate::internal::transport::{SubprocessTransport, Transport};
 use crate::types::config::{ClaudeAgentOptions, PermissionMode};
 use crate::types::hooks::HookEvent;
-use crate::types::messages::Message;
+use crate::types::messages::{Message, UserContentBlock};
 
 /// Client for bidirectional streaming interactions with Claude
 ///
@@ -233,6 +233,130 @@ impl ClaudeClient {
             "message": {
                 "role": "user",
                 "content": prompt_str
+            },
+            "session_id": session_id_str
+        });
+
+        let message_str = serde_json::to_string(&user_message).map_err(|e| {
+            ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
+        })?;
+
+        // Write directly to stdin (bypasses transport lock)
+        let query_guard = query.lock().await;
+        let stdin = query_guard.stdin.clone();
+        drop(query_guard);
+
+        if let Some(stdin_arc) = stdin {
+            let mut stdin_guard = stdin_arc.lock().await;
+            if let Some(ref mut stdin_stream) = *stdin_guard {
+                stdin_stream
+                    .write_all(message_str.as_bytes())
+                    .await
+                    .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
+                stdin_stream.write_all(b"\n").await.map_err(|e| {
+                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
+                })?;
+                stdin_stream
+                    .flush()
+                    .await
+                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
+            } else {
+                return Err(ClaudeError::Transport("stdin not available".to_string()));
+            }
+        } else {
+            return Err(ClaudeError::Transport("stdin not set".to_string()));
+        }
+
+        Ok(())
+    }
+
+    /// Send a query with structured content blocks (supports images)
+    ///
+    /// This method enables multimodal queries in bidirectional streaming mode.
+    /// Use it to send images alongside text for vision-related tasks.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - A vector of content blocks (text and/or images)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, UserContentBlock};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// let base64_data = "iVBORw0KGgo..."; // base64 encoded image
+    /// client.query_with_content(vec![
+    ///     UserContentBlock::text("What's in this image?"),
+    ///     UserContentBlock::image_base64("image/png", base64_data),
+    /// ]).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn query_with_content(
+        &mut self,
+        content: impl Into<Vec<UserContentBlock>>,
+    ) -> Result<()> {
+        self.query_with_content_and_session(content, "default").await
+    }
+
+    /// Send a query with structured content blocks and a specific session ID
+    ///
+    /// This method enables multimodal queries with session management for
+    /// maintaining separate conversation contexts.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - A vector of content blocks (text and/or images)
+    /// * `session_id` - Session identifier for the conversation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, UserContentBlock};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    /// # client.connect().await?;
+    /// client.query_with_content_and_session(
+    ///     vec![
+    ///         UserContentBlock::text("Analyze this chart"),
+    ///         UserContentBlock::image_url("https://example.com/chart.png"),
+    ///     ],
+    ///     "analysis-session",
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn query_with_content_and_session(
+        &mut self,
+        content: impl Into<Vec<UserContentBlock>>,
+        session_id: impl Into<String>,
+    ) -> Result<()> {
+        let query = self.query.as_ref().ok_or_else(|| {
+            ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
+        })?;
+
+        let content_blocks: Vec<UserContentBlock> = content.into();
+        let session_id_str = session_id.into();
+
+        // Format as JSON message for stream-json input format
+        // Content is an array of content blocks, not a simple string
+        let user_message = serde_json::json!({
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": content_blocks
             },
             "session_id": session_id_str
         });
