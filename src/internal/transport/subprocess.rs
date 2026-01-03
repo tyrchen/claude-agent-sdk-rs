@@ -16,6 +16,7 @@ use crate::errors::{
     ClaudeError, CliNotFoundError, ConnectionError, JsonDecodeError, ProcessError, Result,
 };
 use crate::types::config::ClaudeAgentOptions;
+use crate::types::messages::UserContentBlock;
 use crate::version::{
     ENTRYPOINT, MIN_CLI_VERSION, SDK_VERSION, SKIP_VERSION_CHECK_ENV, check_version,
 };
@@ -29,6 +30,8 @@ const DEFAULT_MAX_BUFFER_SIZE: usize = 10 * 1024 * 1024; // 10MB
 pub enum QueryPrompt {
     /// Text prompt (one-shot mode)
     Text(String),
+    /// Structured content blocks (supports images and text)
+    Content(Vec<UserContentBlock>),
     /// Streaming mode (no initial prompt)
     Streaming,
 }
@@ -42,6 +45,12 @@ impl From<String> for QueryPrompt {
 impl From<&str> for QueryPrompt {
     fn from(text: &str) -> Self {
         QueryPrompt::Text(text.to_string())
+    }
+}
+
+impl From<Vec<UserContentBlock>> for QueryPrompt {
+    fn from(blocks: Vec<UserContentBlock>) -> Self {
+        QueryPrompt::Content(blocks)
     }
 }
 
@@ -196,8 +205,11 @@ impl SubprocessTransport {
             "--verbose".to_string(),
         ];
 
-        // For streaming mode, enable bidirectional stream-json input
-        if matches!(self.prompt, QueryPrompt::Streaming) {
+        // For streaming mode or content mode, enable stream-json input
+        if matches!(
+            self.prompt,
+            QueryPrompt::Streaming | QueryPrompt::Content(_)
+        ) {
             args.push("--input-format".to_string());
             args.push("stream-json".to_string());
         }
@@ -596,11 +608,26 @@ impl Transport for SubprocessTransport {
         self.process = Some(child);
         self.ready = true;
 
-        // Send initial prompt if it's text (one-shot mode)
+        // Send initial prompt based on type
         match &self.prompt {
             QueryPrompt::Text(text) => {
                 let text_owned = text.clone();
                 self.write(&text_owned).await?;
+                self.end_input().await?;
+            }
+            QueryPrompt::Content(blocks) => {
+                // Format as JSON user message for stream-json input format
+                let user_message = serde_json::json!({
+                    "type": "user",
+                    "message": {
+                        "role": "user",
+                        "content": blocks
+                    }
+                });
+                let content_json = serde_json::to_string(&user_message).map_err(|e| {
+                    ClaudeError::Transport(format!("Failed to serialize content blocks: {}", e))
+                })?;
+                self.write(&content_json).await?;
                 self.end_input().await?;
             }
             QueryPrompt::Streaming => {
