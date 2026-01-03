@@ -281,7 +281,10 @@ impl ClaudeClient {
     ///
     /// # Errors
     ///
-    /// Returns an error if the client is not connected or if sending fails.
+    /// Returns an error if:
+    /// - The content vector is empty (must include at least one text or image block)
+    /// - The client is not connected (call `connect()` first)
+    /// - Sending the message fails
     ///
     /// # Example
     ///
@@ -319,7 +322,10 @@ impl ClaudeClient {
     ///
     /// # Errors
     ///
-    /// Returns an error if the client is not connected or if sending fails.
+    /// Returns an error if:
+    /// - The content vector is empty (must include at least one text or image block)
+    /// - The client is not connected (call `connect()` first)
+    /// - Sending the message fails
     ///
     /// # Example
     ///
@@ -349,6 +355,14 @@ impl ClaudeClient {
         })?;
 
         let content_blocks: Vec<UserContentBlock> = content.into();
+
+        // Validate non-empty content
+        if content_blocks.is_empty() {
+            return Err(ClaudeError::InvalidConfig(
+                "Content must include at least one block (text or image)".to_string(),
+            ));
+        }
+
         let session_id_str = session_id.into();
 
         // Format as JSON message for stream-json input format

@@ -129,6 +129,13 @@ pub async fn query_stream(
 /// This function allows you to send mixed content including text and images
 /// to Claude. Use [`UserContentBlock`] to construct the content array.
 ///
+/// # Errors
+///
+/// Returns an error if:
+/// - The content vector is empty (must include at least one text or image block)
+/// - Claude CLI cannot be found or started
+/// - The query execution fails
+///
 /// # Examples
 ///
 /// ```no_run
@@ -161,7 +168,16 @@ pub async fn query_with_content(
     content: impl Into<Vec<UserContentBlock>>,
     options: Option<ClaudeAgentOptions>,
 ) -> Result<Vec<Message>> {
-    let query_prompt = QueryPrompt::Content(content.into());
+    let content_blocks = content.into();
+
+    // Validate non-empty content
+    if content_blocks.is_empty() {
+        return Err(crate::errors::ClaudeError::InvalidConfig(
+            "Content must include at least one block (text or image)".to_string(),
+        ));
+    }
+
+    let query_prompt = QueryPrompt::Content(content_blocks);
     let opts = options.unwrap_or_default();
 
     let client = InternalClient::new(query_prompt, opts)?;
@@ -172,6 +188,13 @@ pub async fn query_with_content(
 ///
 /// Combines the benefits of [`query_stream`] (memory efficiency, real-time processing)
 /// with support for structured content blocks including images.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The content vector is empty (must include at least one text or image block)
+/// - Claude CLI cannot be found or started
+/// - The streaming connection fails
 ///
 /// # Examples
 ///
@@ -209,7 +232,16 @@ pub async fn query_stream_with_content(
     content: impl Into<Vec<UserContentBlock>>,
     options: Option<ClaudeAgentOptions>,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<Message>> + Send>>> {
-    let query_prompt = QueryPrompt::Content(content.into());
+    let content_blocks = content.into();
+
+    // Validate non-empty content
+    if content_blocks.is_empty() {
+        return Err(crate::errors::ClaudeError::InvalidConfig(
+            "Content must include at least one block (text or image)".to_string(),
+        ));
+    }
+
+    let query_prompt = QueryPrompt::Content(content_blocks);
     let opts = options.unwrap_or_default();
 
     let mut transport = SubprocessTransport::new(query_prompt, opts)?;
