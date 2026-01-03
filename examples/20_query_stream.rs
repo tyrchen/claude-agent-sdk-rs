@@ -85,6 +85,14 @@ async fn main() -> anyhow::Result<()> {
                         ContentBlock::Thinking(thinking) => {
                             println!("  Thinking: {} chars", thinking.thinking.len());
                         }
+                        ContentBlock::Image(image) => match &image.source {
+                            claude_agent_sdk_rs::ImageSource::Base64 { media_type, .. } => {
+                                println!("  Image (base64): {}", media_type);
+                            }
+                            claude_agent_sdk_rs::ImageSource::Url { url } => {
+                                println!("  Image (url): {}", url);
+                            }
+                        },
                     }
                 }
                 println!();
