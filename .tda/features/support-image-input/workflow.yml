@@ -1,0 +1,79 @@
+name: auto
+description: Automated development workflow without approval gates
+stages:
+- name: prd
+  description: Create product requirements document
+  worker: prd
+  approvalRequired: false
+  maxRetries: 1
+  inputs:
+  - specs/intent.md
+  outputs:
+  - specs/prd.md
+- name: design
+  description: Create technical design
+  worker: designer
+  approvalRequired: false
+  maxRetries: 1
+  inputs:
+  - specs/prd.md
+  outputs:
+  - specs/design.md
+- name: plan
+  description: Create implementation plan
+  worker: planner
+  approvalRequired: false
+  maxRetries: 3
+  inputs:
+  - specs/design.md
+  outputs:
+  - specs/implementation-plan.md
+  - specs/verification-plan.md
+- name: implementation
+  description: Implement the feature
+  worker: builder
+  approvalRequired: false
+  maxRetries: 3
+  inputs:
+  - specs/design.md
+  - specs/implementation-plan.md
+  outputs:
+  - docs/implementation-details.md
+- name: codex-review
+  description: Review the implementation with codex review skill
+  worker: reviewer
+  approvalRequired: false
+  maxRetries: 3
+  inputs:
+  - docs/implementation-details.md
+  - specs/design.md
+  outputs:
+  - docs/codex-review-results.md
+- name: codex-review-fix
+  description: Fix the codex review results
+  worker: builder
+  approvalRequired: false
+  maxRetries: 3
+  inputs:
+  - docs/codex-review-results.md
+  outputs:
+  - docs/codex-review-fix-results.md
+- name: verification
+  description: Verify implementation
+  worker: verifier
+  approvalRequired: false
+  maxRetries: 3
+  inputs:
+  - specs/verification-plan.md
+  outputs:
+  - docs/verification-results.md
+- name: pr
+  description: Create pull request
+  worker: pr
+  approvalRequired: false
+  maxRetries: 2
+  inputs:
+  - specs/intent.md
+  - docs/implementation-details.md
+  - docs/verification-results.md
+  outputs: []

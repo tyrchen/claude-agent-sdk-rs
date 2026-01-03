@@ -1,0 +1,11 @@
+name: support-image-input
+jira: null
+createdAt: 2026-01-03T22:51:42.018542Z
+worktree:
+  path: /Users/tchen/projects/mycode/rust/claude-agent-sdk-rs/.tda-worktrees/support-image-input
+  branch: feature/support-image-input
+  baseBranch: master
+workflow: auto
+variables:
+  featureName: support-image-input
+  branchName: feature/support-image-input
