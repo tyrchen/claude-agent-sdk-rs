@@ -294,7 +294,7 @@ impl ClaudeClient {
     /// let base64_data = "iVBORw0KGgo..."; // base64 encoded image
     /// client.query_with_content(vec![
     ///     UserContentBlock::text("What's in this image?"),
-    ///     UserContentBlock::image_base64("image/png", base64_data),
+    ///     UserContentBlock::image_base64("image/png", base64_data)?,
     /// ]).await?;
     /// # Ok(())
     /// # }
@@ -303,7 +303,8 @@ impl ClaudeClient {
         &mut self,
         content: impl Into<Vec<UserContentBlock>>,
     ) -> Result<()> {
-        self.query_with_content_and_session(content, "default").await
+        self.query_with_content_and_session(content, "default")
+            .await
     }
 
     /// Send a query with structured content blocks and a specific session ID

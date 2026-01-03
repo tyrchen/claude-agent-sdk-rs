@@ -38,6 +38,10 @@ pub enum ClaudeError {
     #[error("CLI not found: {0}")]
     CliNotFound(#[from] CliNotFoundError),
 
+    /// Image validation error
+    #[error("Image validation error: {0}")]
+    ImageValidation(#[from] ImageValidationError),
+
     /// IO error
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -143,6 +147,23 @@ impl MessageParseError {
         Self {
             message: message.into(),
             data,
+        }
+    }
+}
+
+/// Image validation error
+#[derive(Debug, Error)]
+#[error("Image validation error: {message}")]
+pub struct ImageValidationError {
+    /// Error message
+    pub message: String,
+}
+
+impl ImageValidationError {
+    /// Create a new image validation error
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
         }
     }
 }

@@ -2,6 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Supported image MIME types for Claude API
+const SUPPORTED_IMAGE_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/// Maximum base64 data size (15MB results in ~20MB decoded, within Claude's limits)
+const MAX_BASE64_SIZE: usize = 15_728_640;
+
 /// Error types for assistant messages
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -333,13 +339,57 @@ impl UserContentBlock {
     }
 
     /// Create an image content block from base64 data
-    pub fn image_base64(media_type: impl Into<String>, data: impl Into<String>) -> Self {
-        UserContentBlock::Image {
-            source: ImageSource::Base64 {
-                media_type: media_type.into(),
-                data: data.into(),
-            },
+    ///
+    /// # Arguments
+    ///
+    /// * `media_type` - MIME type of the image (e.g., "image/png", "image/jpeg")
+    /// * `data` - Base64-encoded image data (without data URI prefix)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The MIME type is not supported (valid types: image/jpeg, image/png, image/gif, image/webp)
+    /// - The base64 data exceeds the maximum size limit (15MB)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::UserContentBlock;
+    /// let block = UserContentBlock::image_base64("image/png", "iVBORw0KGgo=")?;
+    /// # Ok::<(), claude_agent_sdk_rs::ClaudeError>(())
+    /// ```
+    pub fn image_base64(
+        media_type: impl Into<String>,
+        data: impl Into<String>,
+    ) -> crate::errors::Result<Self> {
+        let media_type_str = media_type.into();
+        let data_str = data.into();
+
+        // Validate MIME type
+        if !SUPPORTED_IMAGE_MIME_TYPES.contains(&media_type_str.as_str()) {
+            return Err(crate::errors::ImageValidationError::new(format!(
+                "Unsupported media type '{}'. Supported types: {:?}",
+                media_type_str, SUPPORTED_IMAGE_MIME_TYPES
+            ))
+            .into());
         }
+
+        // Validate base64 size
+        if data_str.len() > MAX_BASE64_SIZE {
+            return Err(crate::errors::ImageValidationError::new(format!(
+                "Base64 data exceeds maximum size of {} bytes (got {} bytes)",
+                MAX_BASE64_SIZE,
+                data_str.len()
+            ))
+            .into());
+        }
+
+        Ok(UserContentBlock::Image {
+            source: ImageSource::Base64 {
+                media_type: media_type_str,
+                data: data_str,
+            },
+        })
     }
 
     /// Create an image content block from URL
@@ -546,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_user_content_block_image_base64_serialization() {
-        let block = UserContentBlock::image_base64("image/png", "iVBORw0KGgo=");
+        let block = UserContentBlock::image_base64("image/png", "iVBORw0KGgo=").unwrap();
 
         let json = serde_json::to_value(&block).unwrap();
         assert_eq!(json["type"], "image");
@@ -678,5 +728,29 @@ mod tests {
             },
             _ => panic!("Expected Image variant"),
         }
+    }
+
+    #[test]
+    fn test_image_base64_valid() {
+        let block = UserContentBlock::image_base64("image/png", "iVBORw0KGgo=");
+        assert!(block.is_ok());
+    }
+
+    #[test]
+    fn test_image_base64_invalid_mime_type() {
+        let block = UserContentBlock::image_base64("image/bmp", "data");
+        assert!(block.is_err());
+        let err = block.unwrap_err().to_string();
+        assert!(err.contains("Unsupported media type"));
+        assert!(err.contains("image/bmp"));
+    }
+
+    #[test]
+    fn test_image_base64_exceeds_size_limit() {
+        let large_data = "a".repeat(MAX_BASE64_SIZE + 1);
+        let block = UserContentBlock::image_base64("image/png", large_data);
+        assert!(block.is_err());
+        let err = block.unwrap_err().to_string();
+        assert!(err.contains("exceeds maximum size"));
     }
 }

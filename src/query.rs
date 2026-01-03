@@ -183,7 +183,7 @@ pub async fn query_with_content(
 /// async fn main() -> anyhow::Result<()> {
 ///     // Create content with base64 image
 ///     let content = vec![
-///         UserContentBlock::image_base64("image/png", "iVBORw0KGgo..."),
+///         UserContentBlock::image_base64("image/png", "iVBORw0KGgo...")?,
 ///         UserContentBlock::text("Describe this diagram in detail"),
 ///     ];
 ///

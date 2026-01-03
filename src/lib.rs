@@ -145,7 +145,7 @@ pub mod types;
 pub mod version;
 
 // Re-export commonly used types
-pub use errors::{ClaudeError, Result};
+pub use errors::{ClaudeError, ImageValidationError, Result};
 pub use types::{
     config::*,
     hooks::*,
