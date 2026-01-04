@@ -1,80 +1,80 @@
-status: initialized
-currentStageIndex: null
+status: inProgress
+currentStageIndex: 7
 stages:
 - name: prd
-  status: pending
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
-  startedAt: null
-  endedAt: null
+  durationMs: 172358
+  numTurns: 16
+  totalCostUsd: 1.09851375
+  startedAt: 2026-01-03T22:51:47.247400Z
+  endedAt: 2026-01-03T22:54:42.060310Z
   error: null
 - name: design
-  status: pending
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
-  startedAt: null
-  endedAt: null
+  durationMs: 226720
+  numTurns: 13
+  totalCostUsd: 0.84729825
+  startedAt: 2026-01-03T22:54:42.061157Z
+  endedAt: 2026-01-03T22:58:31.163819Z
   error: null
 - name: plan
-  status: pending
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
-  startedAt: null
-  endedAt: null
+  durationMs: 306013
+  numTurns: 8
+  totalCostUsd: 0.50282125
+  startedAt: 2026-01-03T22:58:31.165345Z
+  endedAt: 2026-01-03T23:03:39.245977Z
   error: null
 - name: implementation
-  status: pending
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
-  startedAt: null
-  endedAt: null
+  durationMs: 2200520
+  numTurns: 83
+  totalCostUsd: 10.008782749999998
+  startedAt: 2026-01-03T23:03:39.246670Z
+  endedAt: 2026-01-03T23:40:21.825472Z
   error: null
 - name: codex-review
-  status: pending
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
-  startedAt: null
-  endedAt: null
+  durationMs: 418887
+  numTurns: 17
+  totalCostUsd: 0.54159015
+  startedAt: 2026-01-03T23:40:21.826652Z
+  endedAt: 2026-01-03T23:47:22.515665Z
   error: null
 - name: codex-review-fix
-  status: pending
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
-  startedAt: null
-  endedAt: null
+  durationMs: 1378610
+  numTurns: 57
+  totalCostUsd: 5.4898450000000025
+  startedAt: 2026-01-03T23:47:22.516327Z
+  endedAt: 2026-01-04T00:10:22.970093Z
   error: null
 - name: verification
-  status: pending
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
-  startedAt: null
-  endedAt: null
+  durationMs: 286905
+  numTurns: 33
+  totalCostUsd: 0.8456495
+  startedAt: 2026-01-04T00:10:22.970918Z
+  endedAt: 2026-01-04T00:15:11.650784Z
   error: null
 - name: pr
-  status: pending
+  status: running
   retryCount: 0
   durationMs: 0
   numTurns: 0
   totalCostUsd: 0.0
-  startedAt: null
+  startedAt: 2026-01-04T00:15:11.651388Z
   endedAt: null
   error: null
 metrics:
-  totalDurationMs: 0
-  totalCostUsd: 0.0
-  totalTurns: 0
+  totalDurationMs: 4990013
+  totalCostUsd: 19.334500650000003
+  totalTurns: 227
 pr: null
