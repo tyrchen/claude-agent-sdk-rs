@@ -391,13 +391,7 @@ impl ClaudeClient {
         })?;
 
         let content_blocks: Vec<UserContentBlock> = content.into();
-
-        // Validate non-empty content
-        if content_blocks.is_empty() {
-            return Err(ClaudeError::InvalidConfig(
-                "Content must include at least one block (text or image)".to_string(),
-            ));
-        }
+        UserContentBlock::validate_content(&content_blocks)?;
 
         let session_id_str = session_id.into();
 

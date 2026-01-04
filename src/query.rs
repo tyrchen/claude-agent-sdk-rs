@@ -169,13 +169,7 @@ pub async fn query_with_content(
     options: Option<ClaudeAgentOptions>,
 ) -> Result<Vec<Message>> {
     let content_blocks = content.into();
-
-    // Validate non-empty content
-    if content_blocks.is_empty() {
-        return Err(crate::errors::ClaudeError::InvalidConfig(
-            "Content must include at least one block (text or image)".to_string(),
-        ));
-    }
+    UserContentBlock::validate_content(&content_blocks)?;
 
     let query_prompt = QueryPrompt::Content(content_blocks);
     let opts = options.unwrap_or_default();
@@ -233,13 +227,7 @@ pub async fn query_stream_with_content(
     options: Option<ClaudeAgentOptions>,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<Message>> + Send>>> {
     let content_blocks = content.into();
-
-    // Validate non-empty content
-    if content_blocks.is_empty() {
-        return Err(crate::errors::ClaudeError::InvalidConfig(
-            "Content must include at least one block (text or image)".to_string(),
-        ));
-    }
+    UserContentBlock::validate_content(&content_blocks)?;
 
     let query_prompt = QueryPrompt::Content(content_blocks);
     let opts = options.unwrap_or_default();

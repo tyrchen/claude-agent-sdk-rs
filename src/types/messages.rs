@@ -398,6 +398,23 @@ impl UserContentBlock {
             source: ImageSource::Url { url: url.into() },
         }
     }
+
+    /// Validate a collection of content blocks
+    ///
+    /// Ensures the content is non-empty. This is used internally by query functions
+    /// to provide consistent validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the content blocks slice is empty.
+    pub fn validate_content(blocks: &[UserContentBlock]) -> crate::Result<()> {
+        if blocks.is_empty() {
+            return Err(crate::errors::ClaudeError::InvalidConfig(
+                "Content must include at least one block (text or image)".to_string(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl From<String> for UserContentBlock {
