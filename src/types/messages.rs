@@ -2,6 +2,12 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Supported image MIME types for Claude API
+const SUPPORTED_IMAGE_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/// Maximum base64 data size (15MB results in ~20MB decoded, within Claude's limits)
+const MAX_BASE64_SIZE: usize = 15_728_640;
+
 /// Error types for assistant messages
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -219,6 +225,8 @@ pub enum ContentBlock {
     ToolUse(ToolUseBlock),
     /// Tool result block
     ToolResult(ToolResultBlock),
+    /// Image block
+    Image(ImageBlock),
 }
 
 /// Text content block
@@ -269,6 +277,158 @@ pub enum ToolResultContent {
     Text(String),
     /// Structured blocks
     Blocks(Vec<serde_json::Value>),
+}
+
+/// Image source for user prompts
+///
+/// Represents the source of image data that can be included in user messages.
+/// Claude supports both base64-encoded images and URL references.
+///
+/// # Supported Formats
+///
+/// - JPEG (`image/jpeg`)
+/// - PNG (`image/png`)
+/// - GIF (`image/gif`)
+/// - WebP (`image/webp`)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ImageSource {
+    /// Base64-encoded image data
+    Base64 {
+        /// MIME type (e.g., "image/png", "image/jpeg", "image/gif", "image/webp")
+        media_type: String,
+        /// Base64-encoded image data (without data URI prefix)
+        data: String,
+    },
+    /// URL reference to an image
+    Url {
+        /// Publicly accessible image URL
+        url: String,
+    },
+}
+
+/// Image block for user prompts
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ImageBlock {
+    /// Image source (base64 or URL)
+    pub source: ImageSource,
+}
+
+/// Content block for user prompts (input)
+///
+/// Represents content that can be included in user messages.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UserContentBlock {
+    /// Text content
+    Text {
+        /// Text content string
+        text: String,
+    },
+    /// Image content
+    Image {
+        /// Image source (base64 or URL)
+        source: ImageSource,
+    },
+}
+
+impl UserContentBlock {
+    /// Create a text content block
+    pub fn text(text: impl Into<String>) -> Self {
+        UserContentBlock::Text { text: text.into() }
+    }
+
+    /// Create an image content block from base64 data
+    ///
+    /// # Arguments
+    ///
+    /// * `media_type` - MIME type of the image (e.g., "image/png", "image/jpeg")
+    /// * `data` - Base64-encoded image data (without data URI prefix)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The MIME type is not supported (valid types: image/jpeg, image/png, image/gif, image/webp)
+    /// - The base64 data exceeds the maximum size limit (15MB)
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use claude_agent_sdk_rs::UserContentBlock;
+    /// let block = UserContentBlock::image_base64("image/png", "iVBORw0KGgo=")?;
+    /// # Ok::<(), claude_agent_sdk_rs::ClaudeError>(())
+    /// ```
+    pub fn image_base64(
+        media_type: impl Into<String>,
+        data: impl Into<String>,
+    ) -> crate::errors::Result<Self> {
+        let media_type_str = media_type.into();
+        let data_str = data.into();
+
+        // Validate MIME type
+        if !SUPPORTED_IMAGE_MIME_TYPES.contains(&media_type_str.as_str()) {
+            return Err(crate::errors::ImageValidationError::new(format!(
+                "Unsupported media type '{}'. Supported types: {:?}",
+                media_type_str, SUPPORTED_IMAGE_MIME_TYPES
+            ))
+            .into());
+        }
+
+        // Validate base64 size
+        if data_str.len() > MAX_BASE64_SIZE {
+            return Err(crate::errors::ImageValidationError::new(format!(
+                "Base64 data exceeds maximum size of {} bytes (got {} bytes)",
+                MAX_BASE64_SIZE,
+                data_str.len()
+            ))
+            .into());
+        }
+
+        Ok(UserContentBlock::Image {
+            source: ImageSource::Base64 {
+                media_type: media_type_str,
+                data: data_str,
+            },
+        })
+    }
+
+    /// Create an image content block from URL
+    pub fn image_url(url: impl Into<String>) -> Self {
+        UserContentBlock::Image {
+            source: ImageSource::Url { url: url.into() },
+        }
+    }
+
+    /// Validate a collection of content blocks
+    ///
+    /// Ensures the content is non-empty. This is used internally by query functions
+    /// to provide consistent validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the content blocks slice is empty.
+    pub fn validate_content(blocks: &[UserContentBlock]) -> crate::Result<()> {
+        if blocks.is_empty() {
+            return Err(crate::errors::ClaudeError::InvalidConfig(
+                "Content must include at least one block (text or image)".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl From<String> for UserContentBlock {
+    fn from(text: String) -> Self {
+        UserContentBlock::Text { text }
+    }
+}
+
+impl From<&str> for UserContentBlock {
+    fn from(text: &str) -> Self {
+        UserContentBlock::Text {
+            text: text.to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -382,5 +542,232 @@ mod tests {
         let json = serde_json::to_value(&content).unwrap();
         assert!(json.is_array());
         assert_eq!(json[0]["type"], "text");
+    }
+
+    #[test]
+    fn test_image_source_base64_serialization() {
+        let source = ImageSource::Base64 {
+            media_type: "image/png".to_string(),
+            data: "iVBORw0KGgo=".to_string(),
+        };
+
+        let json = serde_json::to_value(&source).unwrap();
+        assert_eq!(json["type"], "base64");
+        assert_eq!(json["media_type"], "image/png");
+        assert_eq!(json["data"], "iVBORw0KGgo=");
+    }
+
+    #[test]
+    fn test_image_source_url_serialization() {
+        let source = ImageSource::Url {
+            url: "https://example.com/image.png".to_string(),
+        };
+
+        let json = serde_json::to_value(&source).unwrap();
+        assert_eq!(json["type"], "url");
+        assert_eq!(json["url"], "https://example.com/image.png");
+    }
+
+    #[test]
+    fn test_image_source_base64_deserialization() {
+        let json_str = r#"{
+            "type": "base64",
+            "media_type": "image/jpeg",
+            "data": "base64data=="
+        }"#;
+
+        let source: ImageSource = serde_json::from_str(json_str).unwrap();
+        match source {
+            ImageSource::Base64 { media_type, data } => {
+                assert_eq!(media_type, "image/jpeg");
+                assert_eq!(data, "base64data==");
+            }
+            _ => panic!("Expected Base64 variant"),
+        }
+    }
+
+    #[test]
+    fn test_image_source_url_deserialization() {
+        let json_str = r#"{
+            "type": "url",
+            "url": "https://example.com/test.gif"
+        }"#;
+
+        let source: ImageSource = serde_json::from_str(json_str).unwrap();
+        match source {
+            ImageSource::Url { url } => {
+                assert_eq!(url, "https://example.com/test.gif");
+            }
+            _ => panic!("Expected Url variant"),
+        }
+    }
+
+    #[test]
+    fn test_user_content_block_text_serialization() {
+        let block = UserContentBlock::text("Hello world");
+
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "text");
+        assert_eq!(json["text"], "Hello world");
+    }
+
+    #[test]
+    fn test_user_content_block_image_base64_serialization() {
+        let block = UserContentBlock::image_base64("image/png", "iVBORw0KGgo=").unwrap();
+
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "image");
+        assert_eq!(json["source"]["type"], "base64");
+        assert_eq!(json["source"]["media_type"], "image/png");
+        assert_eq!(json["source"]["data"], "iVBORw0KGgo=");
+    }
+
+    #[test]
+    fn test_user_content_block_image_url_serialization() {
+        let block = UserContentBlock::image_url("https://example.com/image.webp");
+
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "image");
+        assert_eq!(json["source"]["type"], "url");
+        assert_eq!(json["source"]["url"], "https://example.com/image.webp");
+    }
+
+    #[test]
+    fn test_user_content_block_from_string() {
+        let block: UserContentBlock = "Test message".into();
+
+        match block {
+            UserContentBlock::Text { text } => {
+                assert_eq!(text, "Test message");
+            }
+            _ => panic!("Expected Text variant"),
+        }
+    }
+
+    #[test]
+    fn test_user_content_block_from_owned_string() {
+        let block: UserContentBlock = String::from("Owned message").into();
+
+        match block {
+            UserContentBlock::Text { text } => {
+                assert_eq!(text, "Owned message");
+            }
+            _ => panic!("Expected Text variant"),
+        }
+    }
+
+    #[test]
+    fn test_image_block_serialization() {
+        let block = ImageBlock {
+            source: ImageSource::Base64 {
+                media_type: "image/gif".to_string(),
+                data: "R0lGODlh".to_string(),
+            },
+        };
+
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["source"]["type"], "base64");
+        assert_eq!(json["source"]["media_type"], "image/gif");
+        assert_eq!(json["source"]["data"], "R0lGODlh");
+    }
+
+    #[test]
+    fn test_content_block_image_serialization() {
+        let block = ContentBlock::Image(ImageBlock {
+            source: ImageSource::Url {
+                url: "https://example.com/photo.jpg".to_string(),
+            },
+        });
+
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "image");
+        assert_eq!(json["source"]["type"], "url");
+        assert_eq!(json["source"]["url"], "https://example.com/photo.jpg");
+    }
+
+    #[test]
+    fn test_content_block_image_deserialization() {
+        let json_str = r#"{
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/webp",
+                "data": "UklGR"
+            }
+        }"#;
+
+        let block: ContentBlock = serde_json::from_str(json_str).unwrap();
+        match block {
+            ContentBlock::Image(image) => match image.source {
+                ImageSource::Base64 { media_type, data } => {
+                    assert_eq!(media_type, "image/webp");
+                    assert_eq!(data, "UklGR");
+                }
+                _ => panic!("Expected Base64 source"),
+            },
+            _ => panic!("Expected Image variant"),
+        }
+    }
+
+    #[test]
+    fn test_user_content_block_deserialization() {
+        let json_str = r#"{
+            "type": "text",
+            "text": "Describe this image"
+        }"#;
+
+        let block: UserContentBlock = serde_json::from_str(json_str).unwrap();
+        match block {
+            UserContentBlock::Text { text } => {
+                assert_eq!(text, "Describe this image");
+            }
+            _ => panic!("Expected Text variant"),
+        }
+    }
+
+    #[test]
+    fn test_user_content_block_image_deserialization() {
+        let json_str = r#"{
+            "type": "image",
+            "source": {
+                "type": "url",
+                "url": "https://example.com/diagram.png"
+            }
+        }"#;
+
+        let block: UserContentBlock = serde_json::from_str(json_str).unwrap();
+        match block {
+            UserContentBlock::Image { source } => match source {
+                ImageSource::Url { url } => {
+                    assert_eq!(url, "https://example.com/diagram.png");
+                }
+                _ => panic!("Expected Url source"),
+            },
+            _ => panic!("Expected Image variant"),
+        }
+    }
+
+    #[test]
+    fn test_image_base64_valid() {
+        let block = UserContentBlock::image_base64("image/png", "iVBORw0KGgo=");
+        assert!(block.is_ok());
+    }
+
+    #[test]
+    fn test_image_base64_invalid_mime_type() {
+        let block = UserContentBlock::image_base64("image/bmp", "data");
+        assert!(block.is_err());
+        let err = block.unwrap_err().to_string();
+        assert!(err.contains("Unsupported media type"));
+        assert!(err.contains("image/bmp"));
+    }
+
+    #[test]
+    fn test_image_base64_exceeds_size_limit() {
+        let large_data = "a".repeat(MAX_BASE64_SIZE + 1);
+        let block = UserContentBlock::image_base64("image/png", large_data);
+        assert!(block.is_err());
+        let err = block.unwrap_err().to_string();
+        assert!(err.contains("exceeds maximum size"));
     }
 }

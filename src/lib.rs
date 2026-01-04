@@ -16,6 +16,7 @@
 //! - **Cost Control**: Budget limits and fallback models for production reliability
 //! - **Extended Thinking**: Configure maximum thinking tokens for complex reasoning
 //! - **Session Management**: Resume, fork, and manage conversation sessions
+//! - **Multimodal Input**: Send images alongside text using base64 or URLs
 //!
 //! ## Quick Start
 //!
@@ -107,6 +108,101 @@
 //! }
 //! ```
 //!
+//! ## Multimodal Input (Images)
+//!
+//! The SDK supports sending images alongside text in your prompts using structured content blocks.
+//! Both base64-encoded images and URL references are supported.
+//!
+//! ### Supported Formats
+//!
+//! - JPEG (`image/jpeg`)
+//! - PNG (`image/png`)
+//! - GIF (`image/gif`)
+//! - WebP (`image/webp`)
+//!
+//! ### Size Limits
+//!
+//! - Maximum base64 data size: 15MB (results in ~20MB decoded)
+//! - Large images may timeout or fail - resize before encoding
+//!
+//! ### Example: Query with Image
+//!
+//! ```no_run
+//! use claude_agent_sdk_rs::{query_with_content, UserContentBlock, Message, ContentBlock};
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     // For real usage, load and base64-encode an image file
+//!     // This example uses a pre-encoded 1x1 red PNG pixel
+//!     let base64_data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+//!
+//!     // Query with text and image
+//!     let messages = query_with_content(vec![
+//!         UserContentBlock::text("What color is this image?"),
+//!         UserContentBlock::image_base64("image/png", base64_data)?,
+//!     ], None).await?;
+//!
+//!     for message in messages {
+//!         if let Message::Assistant(msg) = message {
+//!             for block in &msg.message.content {
+//!                 if let ContentBlock::Text(text) = block {
+//!                     println!("Claude: {}", text.text);
+//!                 }
+//!             }
+//!         }
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Example: Using Image URLs
+//!
+//! ```no_run
+//! use claude_agent_sdk_rs::{query_with_content, UserContentBlock};
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     let messages = query_with_content(vec![
+//!         UserContentBlock::text("Describe this architecture diagram"),
+//!         UserContentBlock::image_url("https://example.com/diagram.png"),
+//!     ], None).await?;
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ### Example: Streaming with Images
+//!
+//! ```no_run
+//! use claude_agent_sdk_rs::{query_stream_with_content, UserContentBlock, Message, ContentBlock};
+//! use futures::StreamExt;
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     // Minimal 1x1 PNG for example purposes
+//!     let png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+//!
+//!     let mut stream = query_stream_with_content(vec![
+//!         UserContentBlock::image_base64("image/png", png_base64)?,
+//!         UserContentBlock::text("What's in this image?"),
+//!     ], None).await?;
+//!
+//!     while let Some(result) = stream.next().await {
+//!         let message = result?;
+//!         if let Message::Assistant(msg) = message {
+//!             for block in &msg.message.content {
+//!                 if let ContentBlock::Text(text) = block {
+//!                     print!("{}", text.text);
+//!                 }
+//!             }
+//!         }
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
 //! ## Configuration
 //!
 //! The SDK provides extensive configuration through [`ClaudeAgentOptions`]:
@@ -145,7 +241,7 @@ pub mod types;
 pub mod version;
 
 // Re-export commonly used types
-pub use errors::{ClaudeError, Result};
+pub use errors::{ClaudeError, ImageValidationError, Result};
 pub use types::{
     config::*,
     hooks::*,
@@ -160,4 +256,4 @@ pub use types::{
 
 // Re-export public API
 pub use client::ClaudeClient;
-pub use query::{query, query_stream};
+pub use query::{query, query_stream, query_stream_with_content, query_with_content};
