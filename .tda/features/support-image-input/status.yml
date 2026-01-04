@@ -1,4 +1,4 @@
-status: inProgress
+status: completed
 currentStageIndex: 7
 stages:
 - name: prd
@@ -65,16 +65,19 @@ stages:
   endedAt: 2026-01-04T00:15:11.650784Z
   error: null
 - name: pr
-  status: running
+  status: completed
   retryCount: 0
-  durationMs: 0
-  numTurns: 0
-  totalCostUsd: 0.0
+  durationMs: 87523
+  numTurns: 17
+  totalCostUsd: 0.14191065000000003
   startedAt: 2026-01-04T00:15:11.651388Z
-  endedAt: null
+  endedAt: 2026-01-04T00:16:40.850065Z
   error: null
 metrics:
-  totalDurationMs: 4990013
-  totalCostUsd: 19.334500650000003
-  totalTurns: 227
-pr: null
+  totalDurationMs: 5077536
+  totalCostUsd: 19.476411300000002
+  totalTurns: 244
+pr:
+  number: 7
+  url: https://github.com/tyrchen/claude-agent-sdk-rs/pull/7
+  state: open
