@@ -78,6 +78,42 @@ impl ClaudeClient {
         }
     }
 
+    /// Create a new ClaudeClient with early validation
+    ///
+    /// Unlike `new()`, this validates the configuration eagerly by attempting
+    /// to create the transport. This catches issues like invalid working directory
+    /// or missing CLI before `connect()` is called.
+    ///
+    /// # Arguments
+    ///
+    /// * `options` - Configuration options for the Claude client
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The working directory does not exist or is not a directory
+    /// - Claude CLI cannot be found
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
+    ///
+    /// let client = ClaudeClient::try_new(ClaudeAgentOptions::default())?;
+    /// # Ok::<(), claude_agent_sdk_rs::ClaudeError>(())
+    /// ```
+    pub fn try_new(options: ClaudeAgentOptions) -> Result<Self> {
+        // Validate by attempting to create transport (but don't keep it)
+        let prompt = QueryPrompt::Streaming;
+        let _ = SubprocessTransport::new(prompt, options.clone())?;
+
+        Ok(Self {
+            options,
+            query: None,
+            connected: false,
+        })
+    }
+
     /// Connect to Claude (analogous to Python's __aenter__)
     ///
     /// This establishes the connection to the Claude Code CLI and initializes

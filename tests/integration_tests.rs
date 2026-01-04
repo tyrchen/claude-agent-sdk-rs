@@ -755,8 +755,8 @@ async fn test_multiple_plugins() -> anyhow::Result<()> {
 }
 
 /// Test that invalid cwd produces a clear error message
-#[tokio::test]
-async fn test_invalid_cwd_error() -> anyhow::Result<()> {
+#[test]
+fn test_invalid_cwd_error() {
     use std::path::Path;
 
     // Test with non-existent directory
@@ -765,11 +765,13 @@ async fn test_invalid_cwd_error() -> anyhow::Result<()> {
         .max_turns(1)
         .build();
 
-    let mut client = ClaudeClient::new(options);
-    let result = client.connect().await;
+    // Validation happens at construction time, before CLI lookup
+    let result = ClaudeClient::try_new(options);
 
-    assert!(result.is_err());
-    let err = result.unwrap_err();
+    let err = match result {
+        Ok(_) => panic!("Expected error for non-existent cwd"),
+        Err(e) => e,
+    };
     let err_msg = err.to_string();
 
     // Should contain a clear error message about the directory
@@ -783,13 +785,11 @@ async fn test_invalid_cwd_error() -> anyhow::Result<()> {
         "Error message should contain the path, got: {}",
         err_msg
     );
-
-    Ok(())
 }
 
 /// Test that cwd pointing to a file produces a clear error
-#[tokio::test]
-async fn test_cwd_is_file_error() -> anyhow::Result<()> {
+#[test]
+fn test_cwd_is_file_error() {
     use std::path::Path;
 
     // Use Cargo.toml as a file that exists but is not a directory
@@ -798,11 +798,13 @@ async fn test_cwd_is_file_error() -> anyhow::Result<()> {
         .max_turns(1)
         .build();
 
-    let mut client = ClaudeClient::new(options);
-    let result = client.connect().await;
+    // Validation happens at construction time, before CLI lookup
+    let result = ClaudeClient::try_new(options);
 
-    assert!(result.is_err());
-    let err = result.unwrap_err();
+    let err = match result {
+        Ok(_) => panic!("Expected error for cwd pointing to file"),
+        Err(e) => e,
+    };
     let err_msg = err.to_string();
 
     // Should contain a clear error message about not being a directory
@@ -811,8 +813,6 @@ async fn test_cwd_is_file_error() -> anyhow::Result<()> {
         "Error message should mention 'not a directory', got: {}",
         err_msg
     );
-
-    Ok(())
 }
 
 // ============================================================================
