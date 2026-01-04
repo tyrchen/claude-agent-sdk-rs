@@ -24,7 +24,8 @@ Rust SDK for interacting with Claude Code CLI, enabling programmatic access to C
 - 📊 **Session Management**: Separate contexts and memory clearing with fork_session
 - 🦀 **Type Safety**: Strongly-typed messages, configs, hooks, and permissions
 - ⚡ **Zero Deadlock**: Lock-free architecture for concurrent read/write
-- 📚 **Comprehensive Examples**: 22 complete examples covering all features
+- 📚 **Comprehensive Examples**: 23 complete examples covering all features
+- 🖼️ **Multimodal Input**: Send images alongside text with base64 or URL sources
 - 🧪 **Well Tested**: Extensive test coverage with unit and integration tests
 
 ## 📦 Installation
@@ -33,7 +34,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-claude-agent-sdk-rs = "0.3"
+claude-agent-sdk-rs = "0.5"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -321,7 +322,7 @@ The SDK provides strongly-typed Rust interfaces for all Claude interactions:
 
 ## 📚 Examples
 
-The SDK includes **22 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
+The SDK includes **23 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
 
 ### Quick Examples
 
@@ -358,6 +359,9 @@ cargo run --example 20_query_stream         # Streaming query API
 cargo run --example 21_custom_plugins       # Load custom plugins
 cargo run --example 22_plugin_integration   # Real-world plugin usage
 
+# Multimodal
+cargo run --example 23_image_input          # Image input with text queries
+
 # Session Management
 cargo run --example 16_session_management   # Session clearing and management
 ```
@@ -373,6 +377,7 @@ cargo run --example 16_session_management   # Session clearing and management
 | **Patterns**    | 14-16    | Comprehensive streaming, hooks, and sessions        |
 | **Production**  | 17-20    | Fallback models, budgets, thinking limits, streaming|
 | **Plugins**     | 21-22    | Custom plugin loading and integration               |
+| **Multimodal**  | 23       | Image input alongside text                          |
 
 ## 📖 API Overview
 
@@ -385,6 +390,8 @@ ClaudeClient
 // Simple query functions for one-shot interactions
 query(prompt: &str, options: Option<ClaudeAgentOptions>) -> Vec<Message>
 query_stream(prompt: &str, options: Option<ClaudeAgentOptions>) -> Stream<Item = Result<Message>>
+query_with_content(content: Vec<UserContentBlock>, options: Option<ClaudeAgentOptions>) -> Vec<Message>
+query_stream_with_content(content: Vec<UserContentBlock>, options: Option<ClaudeAgentOptions>) -> Stream<Item = Result<Message>>
 
 // Configuration
 ClaudeAgentOptions {
