@@ -422,6 +422,12 @@ impl SubprocessTransport {
             }
         }
 
+        // Add additional directories
+        for dir in &self.options.add_dirs {
+            args.push("--add-dir".to_string());
+            args.push(dir.display().to_string());
+        }
+
         // Add extra args
         for (key, value) in &self.options.extra_args {
             args.push(format!("--{}", key));
