@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.5.0](https://github.com/compare/v0.4.0..v0.5.0) - 2026-01-04
+
+### Bug Fixes
+
+- add_dirs not being passed to CLI - ([69618d2](https://github.com/commit/69618d2683f5df9e60e93f4d0c2f223f2c6a1ade)) - Jarod Liu
+
+### Documentation
+
+- add documentation for SettingSource from Python SDK reference (#5) - ([1cf2e08](https://github.com/commit/1cf2e08dae1a7cf122d268ce7856157661838c90)) - Jarod Liu
+
+### Features
+
+- support multimodal image input in user prompts (#7) - ([9f58cf3](https://github.com/commit/9f58cf3b84d095638b27c599b46c9cf862bf2c31)) - Tyr Chen
+
+### Miscellaneous Chores
+
+- update .gitignore - ([cfff87d](https://github.com/commit/cfff87d439ee48a73a2bdd30d0c8692ca8685d98)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([625ce41](https://github.com/commit/625ce41560e8b6d419d44f796ae2ca33bbb6fb3a)) - Tyr Chen
+- Merge pull request #6 from jarod/fix/add-dirs
+
+fix: add_dirs not being passed to CLI - ([6389585](https://github.com/commit/6389585425595611c1b18a1d904b38478a1c024c)) - Tyr Chen
+
+---
 ## [0.4.0](https://github.com/compare/v0.3.3..v0.4.0) - 2025-12-31
 
 ### Bug Fixes
