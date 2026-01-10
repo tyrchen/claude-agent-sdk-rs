@@ -53,6 +53,8 @@ use crate::types::messages::{Message, UserContentBlock};
 pub struct ClaudeClient {
     options: ClaudeAgentOptions,
     query: Option<Arc<TokioMutex<QueryFull>>>,
+    /// Shutdown receiver - signals when background task completes
+    shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
     connected: bool,
 }
 
@@ -74,6 +76,7 @@ impl ClaudeClient {
         Self {
             options,
             query: None,
+            shutdown_rx: None,
             connected: false,
         }
     }
@@ -110,6 +113,7 @@ impl ClaudeClient {
         Ok(Self {
             options,
             query: None,
+            shutdown_rx: None,
             connected: false,
         })
     }
@@ -183,12 +187,13 @@ impl ClaudeClient {
         // Start reading messages in background FIRST
         // This must happen before initialize() because initialize()
         // sends a control request and waits for response
-        query.start().await?;
+        let shutdown_rx = query.start().await?;
 
         // Initialize with hooks (sends control request)
         query.initialize(hooks).await?;
 
         self.query = Some(Arc::new(TokioMutex::new(query)));
+        self.shutdown_rx = Some(shutdown_rx);
         self.connected = true;
 
         Ok(())
@@ -718,7 +723,7 @@ impl ClaudeClient {
     pub async fn get_server_info(&self) -> Option<serde_json::Value> {
         let query = self.query.as_ref()?;
         let query_guard = query.lock().await;
-        query_guard.get_initialization_result().await
+        query_guard.get_initialization_result()
     }
 
     /// Start a new session by switching to a different session ID
@@ -788,14 +793,11 @@ impl ClaudeClient {
                 }
             }
             let transport = Arc::clone(&query_guard.transport);
-
-            // Get the shutdown completion receiver to wait for background task
-            let shutdown_rx = query_guard.take_shutdown_receiver();
             drop(query_guard);
 
             // Wait for background task to complete with timeout instead of fixed sleep
             // This is much faster than the previous 100ms hardcoded sleep
-            if let Some(rx) = shutdown_rx {
+            if let Some(rx) = self.shutdown_rx.take() {
                 // Use a reasonable timeout - background task should finish quickly after stdin is closed
                 let _ = tokio::time::timeout(std::time::Duration::from_millis(500), rx).await;
             }

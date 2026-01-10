@@ -5,6 +5,7 @@ use futures::stream::StreamExt;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{Mutex as TokioMutex, oneshot};
@@ -69,10 +70,8 @@ pub struct QueryFull {
     pub(crate) message_rx: flume::Receiver<serde_json::Value>,
     // Direct access to stdin for writes (bypasses transport lock)
     pub(crate) stdin: Option<Arc<TokioMutex<Option<tokio::process::ChildStdin>>>>,
-    // Store initialization result for get_server_info()
-    initialization_result: Arc<TokioMutex<Option<serde_json::Value>>>,
-    /// Shutdown completion signal - used to wait for background task to finish
-    shutdown_complete: std::sync::Mutex<Option<oneshot::Receiver<()>>>,
+    /// Initialization result - set once during initialize(), read many times
+    initialization_result: OnceLock<serde_json::Value>,
 }
 
 impl QueryFull {
@@ -90,21 +89,13 @@ impl QueryFull {
             message_tx,
             message_rx,
             stdin: None,
-            initialization_result: Arc::new(TokioMutex::new(None)),
-            shutdown_complete: std::sync::Mutex::new(None),
+            initialization_result: OnceLock::new(),
         }
     }
 
     /// Set stdin for direct write access (called from client after transport is connected)
     pub fn set_stdin(&mut self, stdin: Arc<TokioMutex<Option<tokio::process::ChildStdin>>>) {
         self.stdin = Some(stdin);
-    }
-
-    /// Take the shutdown completion receiver
-    ///
-    /// Used by disconnect() to wait for the background task to complete.
-    pub fn take_shutdown_receiver(&self) -> Option<oneshot::Receiver<()>> {
-        self.shutdown_complete.lock().ok()?.take()
     }
 
     /// Set SDK MCP servers
@@ -164,14 +155,17 @@ impl QueryFull {
 
         let response = self.send_control_request(request).await?;
 
-        // Store initialization result for get_server_info()
-        *self.initialization_result.lock().await = Some(response.clone());
+        // Store initialization result for get_server_info() (set once, read many)
+        let _ = self.initialization_result.set(response.clone());
 
         Ok(response)
     }
 
     /// Start reading messages in background
-    pub async fn start(&self) -> Result<()> {
+    ///
+    /// Returns a receiver that signals when the background task completes.
+    /// The caller should store this and await it during disconnect.
+    pub async fn start(&self) -> Result<oneshot::Receiver<()>> {
         let transport = Arc::clone(&self.transport);
         let hook_callbacks = Arc::clone(&self.hook_callbacks);
         let sdk_mcp_servers = Arc::clone(&self.sdk_mcp_servers);
@@ -184,11 +178,6 @@ impl QueryFull {
 
         // Create a channel to signal when background task completes
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
-
-        // Store shutdown receiver for disconnect()
-        if let Ok(mut guard) = self.shutdown_complete.lock() {
-            *guard = Some(shutdown_rx);
-        }
 
         tokio::spawn(async move {
             let mut transport_guard = transport.lock().await;
@@ -258,7 +247,7 @@ impl QueryFull {
             .await
             .map_err(|_| ClaudeError::Transport("Background task failed to start".to_string()))?;
 
-        Ok(())
+        Ok(shutdown_rx)
     }
 
     /// Handle incoming control request from CLI (new version using stdin directly)
@@ -520,8 +509,9 @@ impl QueryFull {
     ///
     /// Returns the initialization result that was obtained during connect().
     /// This includes information about available commands, output styles, and server capabilities.
-    pub async fn get_initialization_result(&self) -> Option<serde_json::Value> {
-        self.initialization_result.lock().await.clone()
+    /// This is lock-free since initialization_result uses OnceLock.
+    pub fn get_initialization_result(&self) -> Option<serde_json::Value> {
+        self.initialization_result.get().cloned()
     }
 
     /// Handle SDK MCP request by routing to the appropriate server
