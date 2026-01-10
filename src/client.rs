@@ -481,29 +481,17 @@ impl ClaudeClient {
         };
 
         Box::pin(async_stream::stream! {
-            // Get the receiver Arc (shared across queries)
+            // Clone the receiver - flume receivers are cloneable and lock-free
             let rx = {
                 let query_guard = query.lock().await;
-                Arc::clone(&query_guard.message_rx)
+                query_guard.message_rx.clone()
             };
 
-            loop {
-                // Lock only for the duration of recv - releases between messages
-                let message = {
-                    let mut rx_guard = rx.lock().await;
-                    rx_guard.recv().await
-                };
-
-                match message {
-                    Some(json) => {
-                        match MessageParser::parse(json) {
-                            Ok(msg) => yield Ok(msg),
-                            Err(e) => {
-                                yield Err(e);
-                            }
-                        }
-                    }
-                    None => break,
+            // No mutex needed - flume receiver is lock-free
+            while let Ok(json) = rx.recv_async().await {
+                match MessageParser::parse(json) {
+                    Ok(msg) => yield Ok(msg),
+                    Err(e) => yield Err(e),
                 }
             }
         })
@@ -558,35 +546,23 @@ impl ClaudeClient {
         };
 
         Box::pin(async_stream::stream! {
-            // Get the receiver Arc (shared across queries)
+            // Clone the receiver - flume receivers are cloneable and lock-free
             let rx = {
                 let query_guard = query.lock().await;
-                Arc::clone(&query_guard.message_rx)
+                query_guard.message_rx.clone()
             };
 
-            loop {
-                // Lock only for the duration of recv - releases between messages
-                let message = {
-                    let mut rx_guard = rx.lock().await;
-                    rx_guard.recv().await
-                };
-
-                match message {
-                    Some(json) => {
-                        match MessageParser::parse(json) {
-                            Ok(msg) => {
-                                let is_result = matches!(msg, Message::Result(_));
-                                yield Ok(msg);
-                                if is_result {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                yield Err(e);
-                            }
+            // No mutex needed - flume receiver is lock-free
+            while let Ok(json) = rx.recv_async().await {
+                match MessageParser::parse(json) {
+                    Ok(msg) => {
+                        let is_result = matches!(msg, Message::Result(_));
+                        yield Ok(msg);
+                        if is_result {
+                            break;
                         }
                     }
-                    None => break,
+                    Err(e) => yield Err(e),
                 }
             }
         })

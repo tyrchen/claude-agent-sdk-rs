@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{Mutex as TokioMutex, mpsc, oneshot};
+use tokio::sync::{Mutex as TokioMutex, oneshot};
 
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
@@ -60,9 +60,9 @@ pub struct QueryFull {
     next_callback_id: Arc<AtomicU64>,
     request_counter: Arc<AtomicU64>,
     pending_responses: Arc<TokioMutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
-    message_tx: mpsc::UnboundedSender<serde_json::Value>,
-    /// Message receiver - shared across queries using Arc to avoid consuming it
-    pub(crate) message_rx: Arc<TokioMutex<mpsc::UnboundedReceiver<serde_json::Value>>>,
+    message_tx: flume::Sender<serde_json::Value>,
+    /// Message receiver - cloneable without mutex thanks to flume
+    pub(crate) message_rx: flume::Receiver<serde_json::Value>,
     // Direct access to stdin for writes (bypasses transport lock)
     pub(crate) stdin: Option<Arc<TokioMutex<Option<tokio::process::ChildStdin>>>>,
     // Store initialization result for get_server_info()
@@ -74,7 +74,7 @@ pub struct QueryFull {
 impl QueryFull {
     /// Create a new Query
     pub fn new(transport: Box<dyn Transport>) -> Self {
-        let (message_tx, message_rx) = mpsc::unbounded_channel();
+        let (message_tx, message_rx) = flume::unbounded();
 
         Self {
             transport: Arc::new(TokioMutex::new(transport)),
@@ -84,7 +84,7 @@ impl QueryFull {
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(TokioMutex::new(HashMap::new())),
             message_tx,
-            message_rx: Arc::new(TokioMutex::new(message_rx)),
+            message_rx,
             stdin: None,
             initialization_result: Arc::new(TokioMutex::new(None)),
             shutdown_complete: std::sync::Mutex::new(None),
@@ -440,9 +440,9 @@ impl QueryFull {
     #[allow(dead_code)]
     pub async fn receive_messages(&self) -> Vec<serde_json::Value> {
         let mut messages = Vec::new();
-        let mut rx = self.message_rx.lock().await;
+        let rx = self.message_rx.clone();
 
-        while let Some(message) = rx.recv().await {
+        while let Ok(message) = rx.recv_async().await {
             messages.push(message);
         }
 
