@@ -7,10 +7,18 @@ use crate::types::messages::Message;
 pub struct MessageParser;
 
 impl MessageParser {
-    /// Parse a JSON value into a Message
+    /// Parse a JSON value into a Message, consuming the value
+    ///
+    /// This method consumes the JSON value to avoid unnecessary cloning.
+    /// On parse error, the original data is not available in the error
+    /// since it was consumed during the parse attempt.
     pub fn parse(data: serde_json::Value) -> Result<Message> {
-        serde_json::from_value(data.clone()).map_err(|e| {
-            MessageParseError::new(format!("Failed to parse message: {}", e), Some(data)).into()
+        serde_json::from_value(data).map_err(|e| {
+            MessageParseError::new(
+                format!("Failed to parse message: {}", e),
+                None, // Don't include original data to avoid cloning overhead
+            )
+            .into()
         })
     }
 }

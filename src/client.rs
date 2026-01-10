@@ -4,7 +4,7 @@ use futures::stream::Stream;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 
 use crate::errors::{ClaudeError, Result};
 use crate::internal::message_parser::MessageParser;
@@ -52,7 +52,7 @@ use crate::types::messages::{Message, UserContentBlock};
 /// ```
 pub struct ClaudeClient {
     options: ClaudeAgentOptions,
-    query: Option<Arc<Mutex<QueryFull>>>,
+    query: Option<Arc<TokioMutex<QueryFull>>>,
     connected: bool,
 }
 
@@ -188,7 +188,7 @@ impl ClaudeClient {
         // Initialize with hooks (sends control request)
         query.initialize(hooks).await?;
 
-        self.query = Some(Arc::new(Mutex::new(query)));
+        self.query = Some(Arc::new(TokioMutex::new(query)));
         self.connected = true;
 
         Ok(())
@@ -481,12 +481,14 @@ impl ClaudeClient {
         };
 
         Box::pin(async_stream::stream! {
-            let rx: Arc<Mutex<tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>>> = {
+            // Get the receiver Arc (shared across queries)
+            let rx = {
                 let query_guard = query.lock().await;
                 Arc::clone(&query_guard.message_rx)
             };
 
             loop {
+                // Lock only for the duration of recv - releases between messages
                 let message = {
                     let mut rx_guard = rx.lock().await;
                     rx_guard.recv().await
@@ -497,7 +499,6 @@ impl ClaudeClient {
                         match MessageParser::parse(json) {
                             Ok(msg) => yield Ok(msg),
                             Err(e) => {
-                                eprintln!("Failed to parse message: {}", e);
                                 yield Err(e);
                             }
                         }
@@ -557,12 +558,14 @@ impl ClaudeClient {
         };
 
         Box::pin(async_stream::stream! {
-            let rx: Arc<Mutex<tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>>> = {
+            // Get the receiver Arc (shared across queries)
+            let rx = {
                 let query_guard = query.lock().await;
                 Arc::clone(&query_guard.message_rx)
             };
 
             loop {
+                // Lock only for the duration of recv - releases between messages
                 let message = {
                     let mut rx_guard = rx.lock().await;
                     rx_guard.recv().await
@@ -579,7 +582,6 @@ impl ClaudeClient {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Failed to parse message: {}", e);
                                 yield Err(e);
                             }
                         }
@@ -807,10 +809,17 @@ impl ClaudeClient {
                 }
             }
             let transport = Arc::clone(&query_guard.transport);
+
+            // Get the shutdown completion receiver to wait for background task
+            let shutdown_rx = query_guard.take_shutdown_receiver();
             drop(query_guard);
 
-            // Give background task a moment to finish reading and release lock
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            // Wait for background task to complete with timeout instead of fixed sleep
+            // This is much faster than the previous 100ms hardcoded sleep
+            if let Some(rx) = shutdown_rx {
+                // Use a reasonable timeout - background task should finish quickly after stdin is closed
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(500), rx).await;
+            }
 
             let mut transport_guard = transport.lock().await;
             transport_guard.close().await?;

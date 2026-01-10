@@ -215,11 +215,12 @@ impl SubprocessTransport {
 
     /// Build command arguments from options
     fn build_command(&self) -> Vec<String> {
-        let mut args = vec![
-            "--output-format".to_string(),
-            "stream-json".to_string(),
-            "--verbose".to_string(),
-        ];
+        let mut args = vec!["--output-format".to_string(), "stream-json".to_string()];
+
+        // Only add verbose flag if enabled (default: true)
+        if self.options.verbose {
+            args.push("--verbose".to_string());
+        }
 
         // For streaming mode or content mode, enable stream-json input
         if matches!(
@@ -494,8 +495,8 @@ impl SubprocessTransport {
 
     /// Check Claude CLI version
     async fn check_claude_version(&self) -> Result<()> {
-        // Skip if environment variable is set
-        if std::env::var(SKIP_VERSION_CHECK_ENV).is_ok() {
+        // Skip if option is set OR environment variable is set
+        if self.options.skip_version_check || std::env::var(SKIP_VERSION_CHECK_ENV).is_ok() {
             return Ok(());
         }
 

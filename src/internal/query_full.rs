@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{Mutex as TokioMutex, mpsc, oneshot};
 
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
@@ -54,18 +54,21 @@ struct IncomingControlRequest {
 
 /// Full Query implementation with bidirectional control protocol
 pub struct QueryFull {
-    pub(crate) transport: Arc<Mutex<Box<dyn Transport>>>,
-    hook_callbacks: Arc<Mutex<HashMap<String, HookCallback>>>,
-    sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
+    pub(crate) transport: Arc<TokioMutex<Box<dyn Transport>>>,
+    hook_callbacks: Arc<TokioMutex<HashMap<String, HookCallback>>>,
+    sdk_mcp_servers: Arc<TokioMutex<HashMap<String, McpSdkServerConfig>>>,
     next_callback_id: Arc<AtomicU64>,
     request_counter: Arc<AtomicU64>,
-    pending_responses: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
+    pending_responses: Arc<TokioMutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
     message_tx: mpsc::UnboundedSender<serde_json::Value>,
-    pub(crate) message_rx: Arc<Mutex<mpsc::UnboundedReceiver<serde_json::Value>>>,
+    /// Message receiver - shared across queries using Arc to avoid consuming it
+    pub(crate) message_rx: Arc<TokioMutex<mpsc::UnboundedReceiver<serde_json::Value>>>,
     // Direct access to stdin for writes (bypasses transport lock)
-    pub(crate) stdin: Option<Arc<Mutex<Option<tokio::process::ChildStdin>>>>,
+    pub(crate) stdin: Option<Arc<TokioMutex<Option<tokio::process::ChildStdin>>>>,
     // Store initialization result for get_server_info()
-    initialization_result: Arc<Mutex<Option<serde_json::Value>>>,
+    initialization_result: Arc<TokioMutex<Option<serde_json::Value>>>,
+    /// Shutdown completion signal - used to wait for background task to finish
+    shutdown_complete: std::sync::Mutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl QueryFull {
@@ -74,22 +77,30 @@ impl QueryFull {
         let (message_tx, message_rx) = mpsc::unbounded_channel();
 
         Self {
-            transport: Arc::new(Mutex::new(transport)),
-            hook_callbacks: Arc::new(Mutex::new(HashMap::new())),
-            sdk_mcp_servers: Arc::new(Mutex::new(HashMap::new())),
+            transport: Arc::new(TokioMutex::new(transport)),
+            hook_callbacks: Arc::new(TokioMutex::new(HashMap::new())),
+            sdk_mcp_servers: Arc::new(TokioMutex::new(HashMap::new())),
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
-            pending_responses: Arc::new(Mutex::new(HashMap::new())),
+            pending_responses: Arc::new(TokioMutex::new(HashMap::new())),
             message_tx,
-            message_rx: Arc::new(Mutex::new(message_rx)),
+            message_rx: Arc::new(TokioMutex::new(message_rx)),
             stdin: None,
-            initialization_result: Arc::new(Mutex::new(None)),
+            initialization_result: Arc::new(TokioMutex::new(None)),
+            shutdown_complete: std::sync::Mutex::new(None),
         }
     }
 
     /// Set stdin for direct write access (called from client after transport is connected)
-    pub fn set_stdin(&mut self, stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>) {
+    pub fn set_stdin(&mut self, stdin: Arc<TokioMutex<Option<tokio::process::ChildStdin>>>) {
         self.stdin = Some(stdin);
+    }
+
+    /// Take the shutdown completion receiver
+    ///
+    /// Used by disconnect() to wait for the background task to complete.
+    pub fn take_shutdown_receiver(&self) -> Option<oneshot::Receiver<()>> {
+        self.shutdown_complete.lock().ok()?.take()
     }
 
     /// Set SDK MCP servers
@@ -167,6 +178,14 @@ impl QueryFull {
         // Create a channel to signal when background task is ready
         let (ready_tx, ready_rx) = oneshot::channel();
 
+        // Create a channel to signal when background task completes
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
+        // Store shutdown receiver for disconnect()
+        if let Ok(mut guard) = self.shutdown_complete.lock() {
+            *guard = Some(shutdown_rx);
+        }
+
         tokio::spawn(async move {
             let mut transport_guard = transport.lock().await;
             let mut stream = transport_guard.read_messages();
@@ -224,6 +243,9 @@ impl QueryFull {
                     Err(_) => break,
                 }
             }
+
+            // Signal that background task has completed
+            let _ = shutdown_tx.send(());
         });
 
         // Wait for background task to be ready before returning
@@ -237,9 +259,9 @@ impl QueryFull {
     /// Handle incoming control request from CLI (new version using stdin directly)
     async fn handle_control_request_with_stdin(
         request: IncomingControlRequest,
-        stdin: Option<Arc<Mutex<Option<tokio::process::ChildStdin>>>>,
-        hook_callbacks: Arc<Mutex<HashMap<String, HookCallback>>>,
-        sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
+        stdin: Option<Arc<TokioMutex<Option<tokio::process::ChildStdin>>>>,
+        hook_callbacks: Arc<TokioMutex<HashMap<String, HookCallback>>>,
+        sdk_mcp_servers: Arc<TokioMutex<HashMap<String, McpSdkServerConfig>>>,
     ) -> Result<()> {
         let request_id = request.request_id;
         let request_data = request.request;
@@ -499,7 +521,7 @@ impl QueryFull {
 
     /// Handle SDK MCP request by routing to the appropriate server
     async fn handle_sdk_mcp_request(
-        sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
+        sdk_mcp_servers: Arc<TokioMutex<HashMap<String, McpSdkServerConfig>>>,
         server_name: &str,
         message: serde_json::Value,
     ) -> Result<serde_json::Value> {
