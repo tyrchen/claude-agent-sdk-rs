@@ -1,5 +1,6 @@
 //! Full Query implementation with bidirectional control protocol
 
+use dashmap::DashMap;
 use futures::stream::StreamExt;
 use serde_json::json;
 use std::collections::HashMap;
@@ -55,11 +56,14 @@ struct IncomingControlRequest {
 /// Full Query implementation with bidirectional control protocol
 pub struct QueryFull {
     pub(crate) transport: Arc<TokioMutex<Box<dyn Transport>>>,
-    hook_callbacks: Arc<TokioMutex<HashMap<String, HookCallback>>>,
-    sdk_mcp_servers: Arc<TokioMutex<HashMap<String, McpSdkServerConfig>>>,
+    /// Hook callbacks - concurrent access via DashMap
+    hook_callbacks: Arc<DashMap<String, HookCallback>>,
+    /// SDK MCP servers - concurrent access via DashMap
+    sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
     next_callback_id: Arc<AtomicU64>,
     request_counter: Arc<AtomicU64>,
-    pending_responses: Arc<TokioMutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
+    /// Pending control request responses - concurrent access via DashMap
+    pending_responses: Arc<DashMap<String, oneshot::Sender<serde_json::Value>>>,
     message_tx: flume::Sender<serde_json::Value>,
     /// Message receiver - cloneable without mutex thanks to flume
     pub(crate) message_rx: flume::Receiver<serde_json::Value>,
@@ -78,11 +82,11 @@ impl QueryFull {
 
         Self {
             transport: Arc::new(TokioMutex::new(transport)),
-            hook_callbacks: Arc::new(TokioMutex::new(HashMap::new())),
-            sdk_mcp_servers: Arc::new(TokioMutex::new(HashMap::new())),
+            hook_callbacks: Arc::new(DashMap::new()),
+            sdk_mcp_servers: Arc::new(DashMap::new()),
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
-            pending_responses: Arc::new(TokioMutex::new(HashMap::new())),
+            pending_responses: Arc::new(DashMap::new()),
             message_tx,
             message_rx,
             stdin: None,
@@ -104,8 +108,11 @@ impl QueryFull {
     }
 
     /// Set SDK MCP servers
-    pub async fn set_sdk_mcp_servers(&mut self, servers: HashMap<String, McpSdkServerConfig>) {
-        *self.sdk_mcp_servers.lock().await = servers;
+    pub fn set_sdk_mcp_servers(&mut self, servers: HashMap<String, McpSdkServerConfig>) {
+        self.sdk_mcp_servers.clear();
+        for (name, config) in servers {
+            self.sdk_mcp_servers.insert(name, config);
+        }
     }
 
     /// Initialize with hooks
@@ -128,10 +135,7 @@ impl QueryFull {
                             "hook_{}",
                             self.next_callback_id.fetch_add(1, Ordering::SeqCst)
                         );
-                        self.hook_callbacks
-                            .lock()
-                            .await
-                            .insert(callback_id.clone(), callback);
+                        self.hook_callbacks.insert(callback_id.clone(), callback);
                         callback_ids.push(callback_id);
                     }
 
@@ -204,8 +208,9 @@ impl QueryFull {
                                 if let Ok(response) =
                                     serde_json::from_value::<ControlResponse>(message.clone())
                                 {
-                                    let mut pending = pending_responses.lock().await;
-                                    if let Some(tx) = pending.remove(&response.response.request_id)
+                                    // DashMap remove returns Option<(K, V)>
+                                    if let Some((_, tx)) =
+                                        pending_responses.remove(&response.response.request_id)
                                     {
                                         let _ = tx.send(response.response.data);
                                     }
@@ -260,8 +265,8 @@ impl QueryFull {
     async fn handle_control_request_with_stdin(
         request: IncomingControlRequest,
         stdin: Option<Arc<TokioMutex<Option<tokio::process::ChildStdin>>>>,
-        hook_callbacks: Arc<TokioMutex<HashMap<String, HookCallback>>>,
-        sdk_mcp_servers: Arc<TokioMutex<HashMap<String, McpSdkServerConfig>>>,
+        hook_callbacks: Arc<DashMap<String, HookCallback>>,
+        sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
     ) -> Result<()> {
         let request_id = request.request_id;
         let request_data = request.request;
@@ -281,13 +286,16 @@ impl QueryFull {
                         ClaudeError::ControlProtocol("Missing callback_id".to_string())
                     })?;
 
-                let callbacks = hook_callbacks.lock().await;
-                let callback = callbacks.get(callback_id).ok_or_else(|| {
-                    ClaudeError::ControlProtocol(format!(
-                        "Hook callback not found: {}",
-                        callback_id
-                    ))
-                })?;
+                // Clone the callback Arc to release the DashMap guard before async call
+                let callback = hook_callbacks
+                    .get(callback_id)
+                    .map(|r| r.clone())
+                    .ok_or_else(|| {
+                        ClaudeError::ControlProtocol(format!(
+                            "Hook callback not found: {}",
+                            callback_id
+                        ))
+                    })?;
 
                 // Parse hook input
                 let input_json = request_data.get("input").cloned().unwrap_or(json!({}));
@@ -389,10 +397,7 @@ impl QueryFull {
 
         // Create oneshot channel for response
         let (tx, rx) = oneshot::channel();
-        self.pending_responses
-            .lock()
-            .await
-            .insert(request_id.clone(), tx);
+        self.pending_responses.insert(request_id.clone(), tx);
 
         // Build and send request
         let control_request = json!({
@@ -521,14 +526,17 @@ impl QueryFull {
 
     /// Handle SDK MCP request by routing to the appropriate server
     async fn handle_sdk_mcp_request(
-        sdk_mcp_servers: Arc<TokioMutex<HashMap<String, McpSdkServerConfig>>>,
+        sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
         server_name: &str,
         message: serde_json::Value,
     ) -> Result<serde_json::Value> {
-        let servers = sdk_mcp_servers.lock().await;
-        let server_config = servers.get(server_name).ok_or_else(|| {
-            ClaudeError::ControlProtocol(format!("SDK MCP server not found: {}", server_name))
-        })?;
+        // Clone the server config to release the DashMap guard before async call
+        let server_config = sdk_mcp_servers
+            .get(server_name)
+            .map(|r| r.clone())
+            .ok_or_else(|| {
+                ClaudeError::ControlProtocol(format!("SDK MCP server not found: {}", server_name))
+            })?;
 
         // Call the server's handle_message method
         server_config

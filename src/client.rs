@@ -160,7 +160,7 @@ impl ClaudeClient {
             } else {
                 std::collections::HashMap::new()
             };
-        query.set_sdk_mcp_servers(sdk_mcp_servers).await;
+        query.set_sdk_mcp_servers(sdk_mcp_servers);
 
         // Convert hooks to internal format
         let hooks = self.options.hooks.as_ref().map(|hooks_map| {
