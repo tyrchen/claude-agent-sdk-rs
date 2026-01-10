@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
@@ -55,16 +56,21 @@ impl From<Vec<UserContentBlock>> for QueryPrompt {
 }
 
 /// Subprocess transport for communicating with Claude Code CLI
+///
+/// All internal state that requires mutation is wrapped in synchronization primitives,
+/// allowing all trait methods to use `&self` instead of `&mut self`.
 pub struct SubprocessTransport {
     cli_path: PathBuf,
     cwd: Option<PathBuf>,
     options: ClaudeAgentOptions,
     prompt: QueryPrompt,
-    process: Option<Child>,
+    /// Child process handle - wrapped in std::sync::Mutex for brief synchronous access
+    process: std::sync::Mutex<Option<Child>>,
     pub(crate) stdin: Arc<Mutex<Option<ChildStdin>>>,
     pub(crate) stdout: Arc<Mutex<Option<BufReader<ChildStdout>>>>,
     max_buffer_size: usize,
-    ready: bool,
+    /// Ready state - uses AtomicBool for lock-free access
+    ready: AtomicBool,
 }
 
 impl SubprocessTransport {
@@ -100,11 +106,11 @@ impl SubprocessTransport {
             cwd,
             options,
             prompt,
-            process: None,
+            process: std::sync::Mutex::new(None),
             stdin: Arc::new(Mutex::new(None)),
             stdout: Arc::new(Mutex::new(None)),
             max_buffer_size,
-            ready: false,
+            ready: AtomicBool::new(false),
         })
     }
 
@@ -554,7 +560,7 @@ impl SubprocessTransport {
 
 #[async_trait]
 impl Transport for SubprocessTransport {
-    async fn connect(&mut self) -> Result<()> {
+    async fn connect(&self) -> Result<()> {
         // Note: cwd validation is done in new() for early error detection
 
         // Check version
@@ -614,8 +620,8 @@ impl Transport for SubprocessTransport {
 
         *self.stdin.lock().await = Some(stdin);
         *self.stdout.lock().await = Some(BufReader::new(stdout));
-        self.process = Some(child);
-        self.ready = true;
+        *self.process.lock().unwrap() = Some(child);
+        self.ready.store(true, Ordering::SeqCst);
 
         // Send initial prompt based on type
         match &self.prompt {
@@ -647,7 +653,7 @@ impl Transport for SubprocessTransport {
         Ok(())
     }
 
-    async fn write(&mut self, data: &str) -> Result<()> {
+    async fn write(&self, data: &str) -> Result<()> {
         let mut stdin_guard = self.stdin.lock().await;
         if let Some(ref mut stdin) = *stdin_guard {
             stdin
@@ -668,9 +674,7 @@ impl Transport for SubprocessTransport {
         }
     }
 
-    fn read_messages(
-        &mut self,
-    ) -> Pin<Box<dyn Stream<Item = Result<serde_json::Value>> + Send + '_>> {
+    fn read_messages(&self) -> Pin<Box<dyn Stream<Item = Result<serde_json::Value>> + Send + '_>> {
         let stdout = Arc::clone(&self.stdout);
         let max_buffer_size = self.max_buffer_size;
 
@@ -724,14 +728,16 @@ impl Transport for SubprocessTransport {
         })
     }
 
-    async fn close(&mut self) -> Result<()> {
+    async fn close(&self) -> Result<()> {
         // Close stdin
         if let Some(mut stdin) = self.stdin.lock().await.take() {
             let _ = stdin.shutdown().await;
         }
 
         // Wait for process to exit
-        if let Some(mut process) = self.process.take() {
+        // Take the process out of the mutex and drop the guard before awaiting
+        let process_opt = self.process.lock().unwrap().take();
+        if let Some(mut process) = process_opt {
             let status = process.wait().await.map_err(|e| {
                 ClaudeError::Process(ProcessError::new(
                     format!("Failed to wait for process: {}", e),
@@ -749,15 +755,15 @@ impl Transport for SubprocessTransport {
             }
         }
 
-        self.ready = false;
+        self.ready.store(false, Ordering::SeqCst);
         Ok(())
     }
 
     fn is_ready(&self) -> bool {
-        self.ready
+        self.ready.load(Ordering::SeqCst)
     }
 
-    async fn end_input(&mut self) -> Result<()> {
+    async fn end_input(&self) -> Result<()> {
         if let Some(mut stdin) = self.stdin.lock().await.take() {
             stdin
                 .shutdown()
@@ -770,7 +776,9 @@ impl Transport for SubprocessTransport {
 
 impl Drop for SubprocessTransport {
     fn drop(&mut self) {
-        if let Some(mut process) = self.process.take() {
+        if let Ok(mut guard) = self.process.lock()
+            && let Some(mut process) = guard.take()
+        {
             let _ = process.start_kill();
         }
     }

@@ -136,7 +136,7 @@ impl ClaudeClient {
 
         // Create transport in streaming mode (no initial prompt)
         let prompt = QueryPrompt::Streaming;
-        let mut transport = SubprocessTransport::new(prompt, self.options.clone())?;
+        let transport = SubprocessTransport::new(prompt, self.options.clone())?;
 
         // Don't send initial prompt - we'll use query() for that
         transport.connect().await?;
@@ -782,8 +782,8 @@ impl ClaudeClient {
                 let _ = tokio::time::timeout(std::time::Duration::from_millis(500), rx).await;
             }
 
-            let mut transport_guard = query.transport.lock().await;
-            transport_guard.close().await?;
+            // No lock needed - Transport uses &self methods with internal sync
+            query.transport.close().await?;
         }
 
         Ok(())

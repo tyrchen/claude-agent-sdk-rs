@@ -10,6 +10,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{Mutex as TokioMutex, oneshot};
 
+// Transport uses &self for all methods via internal synchronization
+
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
 use crate::types::mcp::McpSdkServerConfig;
@@ -56,7 +58,8 @@ struct IncomingControlRequest {
 
 /// Full Query implementation with bidirectional control protocol
 pub struct QueryFull {
-    pub(crate) transport: Arc<TokioMutex<Box<dyn Transport>>>,
+    /// Transport for communication - uses &self methods via internal sync
+    pub(crate) transport: Arc<dyn Transport>,
     /// Hook callbacks - concurrent access via DashMap
     hook_callbacks: Arc<DashMap<String, HookCallback>>,
     /// SDK MCP servers - concurrent access via DashMap
@@ -80,7 +83,7 @@ impl QueryFull {
         let (message_tx, message_rx) = flume::unbounded();
 
         Self {
-            transport: Arc::new(TokioMutex::new(transport)),
+            transport: Arc::from(transport),
             hook_callbacks: Arc::new(DashMap::new()),
             sdk_mcp_servers: Arc::new(DashMap::new()),
             next_callback_id: Arc::new(AtomicU64::new(0)),
@@ -180,8 +183,8 @@ impl QueryFull {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
         tokio::spawn(async move {
-            let mut transport_guard = transport.lock().await;
-            let mut stream = transport_guard.read_messages();
+            // No lock needed - Transport uses &self methods with internal sync
+            let mut stream = transport.read_messages();
 
             // Signal that we're ready to receive messages
             let _ = ready_tx.send(());
