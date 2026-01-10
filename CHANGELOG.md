@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.6.0](https://github.com/compare/v0.5.1..v0.6.0) - 2026-01-10
+
+### Miscellaneous Chores
+
+- bump version to 0.6.0 - ([1e0e83a](https://github.com/commit/1e0e83a50c26e8ac3f9d614ce69391082e389a44)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([d31b52a](https://github.com/commit/d31b52af44d6a5c4df0800e884948dc9dcba19a0)) - Tyr Chen
+
+### Performance
+
+- optimize turn execution latency (#8) - ([fcf2f24](https://github.com/commit/fcf2f24b46e0ecff4b8f58aaaa218dd447218ee7)) - Tyr Chen
+
+---
 ## [0.5.1](https://github.com/compare/v0.5.0..v0.5.1) - 2026-01-10
 
 ### Documentation
