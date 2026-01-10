@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.5.1](https://github.com/compare/v0.5.0..v0.5.1) - 2026-01-10
+
+### Documentation
+
+- update README for v0.5.0 - ([d14a514](https://github.com/commit/d14a5143aac755ec2fd0479a8318643c707ff93a)) - Tyr Chen
+
+### Features
+
+- add get_claude_code_version() function - ([68e6f77](https://github.com/commit/68e6f774688d797adc5abde12d537475dc4efd79)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([b249013](https://github.com/commit/b249013a63a5ee054c6590dbba54ffb6e478416e)) - Tyr Chen
+
+---
 ## [0.5.0](https://github.com/compare/v0.4.0..v0.5.0) - 2026-01-04
 
 ### Bug Fixes
