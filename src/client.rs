@@ -798,6 +798,9 @@ impl ClaudeClient {
             return Ok(());
         }
 
+        // Mark as disconnected early to prevent Drop warning if close() fails
+        self.connected = false;
+
         if let Some(query) = self.query.take() {
             // Close stdin first (using direct access) to signal CLI to exit
             // This will cause the background task to finish and release transport lock
@@ -825,7 +828,6 @@ impl ClaudeClient {
             transport_guard.close().await?;
         }
 
-        self.connected = false;
         Ok(())
     }
 }
