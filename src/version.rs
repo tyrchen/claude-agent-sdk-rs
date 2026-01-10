@@ -1,7 +1,48 @@
 //! Version information for the Claude Agent SDK
 
+use std::sync::OnceLock;
+
 /// The version of this SDK
 pub const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Cached Claude Code CLI version
+static CLAUDE_CODE_VERSION: OnceLock<Option<String>> = OnceLock::new();
+
+/// Get the Claude Code CLI version.
+///
+/// This function caches the result using `OnceLock`, so the CLI is only invoked once.
+/// Returns `None` if the CLI is not found or the version cannot be determined.
+///
+/// # Example
+///
+/// ```no_run
+/// use claude_agent_sdk_rs::version::get_claude_code_version;
+///
+/// if let Some(version) = get_claude_code_version() {
+///     println!("Claude Code CLI version: {}", version);
+/// } else {
+///     println!("Claude Code CLI not found");
+/// }
+/// ```
+pub fn get_claude_code_version() -> Option<&'static str> {
+    CLAUDE_CODE_VERSION
+        .get_or_init(|| {
+            std::process::Command::new("claude")
+                .arg("--version")
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .and_then(|output| {
+                    let version_output = String::from_utf8_lossy(&output.stdout);
+                    version_output
+                        .lines()
+                        .next()
+                        .and_then(|line| line.split_whitespace().next())
+                        .map(|v| v.trim().to_string())
+                })
+        })
+        .as_deref()
+}
 
 /// Minimum required Claude Code CLI version
 pub const MIN_CLI_VERSION: &str = "2.0.0";

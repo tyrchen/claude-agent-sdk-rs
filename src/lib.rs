@@ -257,3 +257,4 @@ pub use types::{
 // Re-export public API
 pub use client::ClaudeClient;
 pub use query::{query, query_stream, query_stream_with_content, query_with_content};
+pub use version::get_claude_code_version;
