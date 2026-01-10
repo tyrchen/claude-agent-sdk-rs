@@ -7,10 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::io::AsyncWriteExt;
-use tokio::sync::{Mutex as TokioMutex, oneshot};
-
-// Transport uses &self for all methods via internal synchronization
+use tokio::sync::oneshot;
 
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
@@ -71,8 +68,6 @@ pub struct QueryFull {
     message_tx: flume::Sender<serde_json::Value>,
     /// Message receiver - cloneable without mutex thanks to flume
     pub(crate) message_rx: flume::Receiver<serde_json::Value>,
-    // Direct access to stdin for writes (bypasses transport lock)
-    pub(crate) stdin: Option<Arc<TokioMutex<Option<tokio::process::ChildStdin>>>>,
     /// Initialization result - set once during initialize(), read many times
     initialization_result: OnceLock<serde_json::Value>,
 }
@@ -91,14 +86,8 @@ impl QueryFull {
             pending_responses: Arc::new(DashMap::new()),
             message_tx,
             message_rx,
-            stdin: None,
             initialization_result: OnceLock::new(),
         }
-    }
-
-    /// Set stdin for direct write access (called from client after transport is connected)
-    pub fn set_stdin(&mut self, stdin: Arc<TokioMutex<Option<tokio::process::ChildStdin>>>) {
-        self.stdin = Some(stdin);
     }
 
     /// Set SDK MCP servers
@@ -170,11 +159,11 @@ impl QueryFull {
     /// The caller should store this and await it during disconnect.
     pub async fn start(&self) -> Result<oneshot::Receiver<()>> {
         let transport = Arc::clone(&self.transport);
+        let transport_for_hooks = Arc::clone(&self.transport);
         let hook_callbacks = Arc::clone(&self.hook_callbacks);
         let sdk_mcp_servers = Arc::clone(&self.sdk_mcp_servers);
         let pending_responses = Arc::clone(&self.pending_responses);
         let message_tx = self.message_tx.clone();
-        let stdin = self.stdin.clone();
 
         // Create a channel to signal when background task is ready
         let (ready_tx, ready_rx) = oneshot::channel();
@@ -213,14 +202,14 @@ impl QueryFull {
                                 if let Ok(request) = serde_json::from_value::<IncomingControlRequest>(
                                     message.clone(),
                                 ) {
-                                    let stdin_clone = stdin.clone();
+                                    let transport_clone = Arc::clone(&transport_for_hooks);
                                     let hook_callbacks_clone = Arc::clone(&hook_callbacks);
                                     let sdk_mcp_servers_clone = Arc::clone(&sdk_mcp_servers);
 
                                     tokio::spawn(async move {
-                                        if let Err(e) = Self::handle_control_request_with_stdin(
+                                        if let Err(e) = Self::handle_control_request(
                                             request,
-                                            stdin_clone,
+                                            transport_clone,
                                             hook_callbacks_clone,
                                             sdk_mcp_servers_clone,
                                         )
@@ -253,10 +242,10 @@ impl QueryFull {
         Ok(shutdown_rx)
     }
 
-    /// Handle incoming control request from CLI (new version using stdin directly)
-    async fn handle_control_request_with_stdin(
+    /// Handle incoming control request from CLI
+    async fn handle_control_request(
         request: IncomingControlRequest,
-        stdin: Option<Arc<TokioMutex<Option<tokio::process::ChildStdin>>>>,
+        transport: Arc<dyn Transport>,
         hook_callbacks: Arc<DashMap<String, HookCallback>>,
         sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
     ) -> Result<()> {
@@ -351,30 +340,8 @@ impl QueryFull {
         let response_str = serde_json::to_string(&response)
             .map_err(|e| ClaudeError::Transport(format!("Failed to serialize response: {}", e)))?;
 
-        // Write directly to stdin (bypasses transport lock)
-        if let Some(ref stdin_arc) = stdin {
-            let mut stdin_guard = stdin_arc.lock().await;
-            if let Some(ref mut stdin_stream) = *stdin_guard {
-                use tokio::io::AsyncWriteExt;
-                stdin_stream
-                    .write_all(response_str.as_bytes())
-                    .await
-                    .map_err(|e| {
-                        ClaudeError::Transport(format!("Failed to write control response: {}", e))
-                    })?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
-                stdin_stream
-                    .flush()
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
-            } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
-            }
-        } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
-        }
+        // Write via transport - stdin/stdout have separate locks, no deadlock
+        transport.write(&response_str).await?;
 
         Ok(())
     }
@@ -401,29 +368,8 @@ impl QueryFull {
         let request_str = serde_json::to_string(&control_request)
             .map_err(|e| ClaudeError::Transport(format!("Failed to serialize request: {}", e)))?;
 
-        // Write directly to stdin (bypasses transport lock held by background reader)
-        if let Some(ref stdin) = self.stdin {
-            let mut stdin_guard = stdin.lock().await;
-            if let Some(ref mut stdin_stream) = *stdin_guard {
-                stdin_stream
-                    .write_all(request_str.as_bytes())
-                    .await
-                    .map_err(|e| {
-                        ClaudeError::Transport(format!("Failed to write control request: {}", e))
-                    })?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
-                stdin_stream
-                    .flush()
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
-            } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
-            }
-        } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
-        }
+        // Write via transport - stdin/stdout have separate locks, no deadlock
+        self.transport.write(&request_str).await?;
 
         // Wait for response
         let response = rx.await.map_err(|_| {

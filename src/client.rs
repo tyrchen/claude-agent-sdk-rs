@@ -3,7 +3,6 @@
 use futures::stream::Stream;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 
 use crate::errors::{ClaudeError, Result};
 use crate::internal::message_parser::MessageParser;
@@ -141,12 +140,8 @@ impl ClaudeClient {
         // Don't send initial prompt - we'll use query() for that
         transport.connect().await?;
 
-        // Extract stdin for direct access (avoids transport lock deadlock)
-        let stdin = Arc::clone(&transport.stdin);
-
         // Create Query with hooks
         let mut query = QueryFull::new(Box::new(transport));
-        query.set_stdin(stdin);
 
         // Extract SDK MCP servers from options
         let sdk_mcp_servers =
@@ -282,27 +277,8 @@ impl ClaudeClient {
             ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
         })?;
 
-        // Write directly to stdin - no outer lock needed, stdin has its own Mutex
-        let stdin_arc = query
-            .stdin
-            .as_ref()
-            .ok_or_else(|| ClaudeError::Transport("stdin not set".to_string()))?;
-        let mut stdin_guard = stdin_arc.lock().await;
-        let stdin_stream = stdin_guard
-            .as_mut()
-            .ok_or_else(|| ClaudeError::Transport("stdin not available".to_string()))?;
-        stdin_stream
-            .write_all(message_str.as_bytes())
-            .await
-            .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
-        stdin_stream
-            .write_all(b"\n")
-            .await
-            .map_err(|e| ClaudeError::Transport(format!("Failed to write newline: {}", e)))?;
-        stdin_stream
-            .flush()
-            .await
-            .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
+        // Write via transport - stdin/stdout have separate locks, no deadlock
+        query.transport.write(&message_str).await?;
 
         Ok(())
     }
@@ -411,27 +387,8 @@ impl ClaudeClient {
             ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
         })?;
 
-        // Write directly to stdin - no outer lock needed, stdin has its own Mutex
-        let stdin_arc = query
-            .stdin
-            .as_ref()
-            .ok_or_else(|| ClaudeError::Transport("stdin not set".to_string()))?;
-        let mut stdin_guard = stdin_arc.lock().await;
-        let stdin_stream = stdin_guard
-            .as_mut()
-            .ok_or_else(|| ClaudeError::Transport("stdin not available".to_string()))?;
-        stdin_stream
-            .write_all(message_str.as_bytes())
-            .await
-            .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
-        stdin_stream
-            .write_all(b"\n")
-            .await
-            .map_err(|e| ClaudeError::Transport(format!("Failed to write newline: {}", e)))?;
-        stdin_stream
-            .flush()
-            .await
-            .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
+        // Write via transport - stdin/stdout have separate locks, no deadlock
+        query.transport.write(&message_str).await?;
 
         Ok(())
     }
@@ -767,13 +724,8 @@ impl ClaudeClient {
 
         if let Some(query) = self.query.take() {
             // Close stdin first to signal CLI to exit
-            // This will cause the background task to finish and release transport lock
-            if let Some(ref stdin_arc) = query.stdin {
-                let mut stdin_guard = stdin_arc.lock().await;
-                if let Some(mut stdin_stream) = stdin_guard.take() {
-                    let _ = stdin_stream.shutdown().await;
-                }
-            }
+            // This will cause the background task to finish
+            let _ = query.transport.end_input().await;
 
             // Wait for background task to complete with timeout instead of fixed sleep
             // This is much faster than the previous 100ms hardcoded sleep
@@ -782,7 +734,7 @@ impl ClaudeClient {
                 let _ = tokio::time::timeout(std::time::Duration::from_millis(500), rx).await;
             }
 
-            // No lock needed - Transport uses &self methods with internal sync
+            // Close the transport (waits for process to exit)
             query.transport.close().await?;
         }
 

@@ -66,8 +66,10 @@ pub struct SubprocessTransport {
     prompt: QueryPrompt,
     /// Child process handle - wrapped in std::sync::Mutex for brief synchronous access
     process: std::sync::Mutex<Option<Child>>,
-    pub(crate) stdin: Arc<Mutex<Option<ChildStdin>>>,
-    pub(crate) stdout: Arc<Mutex<Option<BufReader<ChildStdout>>>>,
+    /// stdin for writing - uses tokio Mutex for async access
+    stdin: Arc<Mutex<Option<ChildStdin>>>,
+    /// stdout for reading - uses tokio Mutex for async access
+    stdout: Arc<Mutex<Option<BufReader<ChildStdout>>>>,
     max_buffer_size: usize,
     /// Ready state - uses AtomicBool for lock-free access
     ready: AtomicBool,
