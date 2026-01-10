@@ -1,12 +1,13 @@
 //! Full Query implementation with bidirectional control protocol
 
+use dashmap::DashMap;
 use futures::stream::StreamExt;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::io::AsyncWriteExt;
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::oneshot;
 
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
@@ -54,47 +55,47 @@ struct IncomingControlRequest {
 
 /// Full Query implementation with bidirectional control protocol
 pub struct QueryFull {
-    pub(crate) transport: Arc<Mutex<Box<dyn Transport>>>,
-    hook_callbacks: Arc<Mutex<HashMap<String, HookCallback>>>,
-    sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
+    /// Transport for communication - uses &self methods via internal sync
+    pub(crate) transport: Arc<dyn Transport>,
+    /// Hook callbacks - concurrent access via DashMap
+    hook_callbacks: Arc<DashMap<String, HookCallback>>,
+    /// SDK MCP servers - concurrent access via DashMap
+    sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
     next_callback_id: Arc<AtomicU64>,
     request_counter: Arc<AtomicU64>,
-    pending_responses: Arc<Mutex<HashMap<String, oneshot::Sender<serde_json::Value>>>>,
-    message_tx: mpsc::UnboundedSender<serde_json::Value>,
-    pub(crate) message_rx: Arc<Mutex<mpsc::UnboundedReceiver<serde_json::Value>>>,
-    // Direct access to stdin for writes (bypasses transport lock)
-    pub(crate) stdin: Option<Arc<Mutex<Option<tokio::process::ChildStdin>>>>,
-    // Store initialization result for get_server_info()
-    initialization_result: Arc<Mutex<Option<serde_json::Value>>>,
+    /// Pending control request responses - concurrent access via DashMap
+    pending_responses: Arc<DashMap<String, oneshot::Sender<serde_json::Value>>>,
+    message_tx: flume::Sender<serde_json::Value>,
+    /// Message receiver - cloneable without mutex thanks to flume
+    pub(crate) message_rx: flume::Receiver<serde_json::Value>,
+    /// Initialization result - set once during initialize(), read many times
+    initialization_result: OnceLock<serde_json::Value>,
 }
 
 impl QueryFull {
     /// Create a new Query
     pub fn new(transport: Box<dyn Transport>) -> Self {
-        let (message_tx, message_rx) = mpsc::unbounded_channel();
+        let (message_tx, message_rx) = flume::unbounded();
 
         Self {
-            transport: Arc::new(Mutex::new(transport)),
-            hook_callbacks: Arc::new(Mutex::new(HashMap::new())),
-            sdk_mcp_servers: Arc::new(Mutex::new(HashMap::new())),
+            transport: Arc::from(transport),
+            hook_callbacks: Arc::new(DashMap::new()),
+            sdk_mcp_servers: Arc::new(DashMap::new()),
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
-            pending_responses: Arc::new(Mutex::new(HashMap::new())),
+            pending_responses: Arc::new(DashMap::new()),
             message_tx,
-            message_rx: Arc::new(Mutex::new(message_rx)),
-            stdin: None,
-            initialization_result: Arc::new(Mutex::new(None)),
+            message_rx,
+            initialization_result: OnceLock::new(),
         }
     }
 
-    /// Set stdin for direct write access (called from client after transport is connected)
-    pub fn set_stdin(&mut self, stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>) {
-        self.stdin = Some(stdin);
-    }
-
     /// Set SDK MCP servers
-    pub async fn set_sdk_mcp_servers(&mut self, servers: HashMap<String, McpSdkServerConfig>) {
-        *self.sdk_mcp_servers.lock().await = servers;
+    pub fn set_sdk_mcp_servers(&mut self, servers: HashMap<String, McpSdkServerConfig>) {
+        self.sdk_mcp_servers.clear();
+        for (name, config) in servers {
+            self.sdk_mcp_servers.insert(name, config);
+        }
     }
 
     /// Initialize with hooks
@@ -117,10 +118,7 @@ impl QueryFull {
                             "hook_{}",
                             self.next_callback_id.fetch_add(1, Ordering::SeqCst)
                         );
-                        self.hook_callbacks
-                            .lock()
-                            .await
-                            .insert(callback_id.clone(), callback);
+                        self.hook_callbacks.insert(callback_id.clone(), callback);
                         callback_ids.push(callback_id);
                     }
 
@@ -149,27 +147,33 @@ impl QueryFull {
 
         let response = self.send_control_request(request).await?;
 
-        // Store initialization result for get_server_info()
-        *self.initialization_result.lock().await = Some(response.clone());
+        // Store initialization result for get_server_info() (set once, read many)
+        let _ = self.initialization_result.set(response.clone());
 
         Ok(response)
     }
 
     /// Start reading messages in background
-    pub async fn start(&self) -> Result<()> {
+    ///
+    /// Returns a receiver that signals when the background task completes.
+    /// The caller should store this and await it during disconnect.
+    pub async fn start(&self) -> Result<oneshot::Receiver<()>> {
         let transport = Arc::clone(&self.transport);
+        let transport_for_hooks = Arc::clone(&self.transport);
         let hook_callbacks = Arc::clone(&self.hook_callbacks);
         let sdk_mcp_servers = Arc::clone(&self.sdk_mcp_servers);
         let pending_responses = Arc::clone(&self.pending_responses);
         let message_tx = self.message_tx.clone();
-        let stdin = self.stdin.clone();
 
         // Create a channel to signal when background task is ready
         let (ready_tx, ready_rx) = oneshot::channel();
 
+        // Create a channel to signal when background task completes
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
         tokio::spawn(async move {
-            let mut transport_guard = transport.lock().await;
-            let mut stream = transport_guard.read_messages();
+            // No lock needed - Transport uses &self methods with internal sync
+            let mut stream = transport.read_messages();
 
             // Signal that we're ready to receive messages
             let _ = ready_tx.send(());
@@ -185,8 +189,9 @@ impl QueryFull {
                                 if let Ok(response) =
                                     serde_json::from_value::<ControlResponse>(message.clone())
                                 {
-                                    let mut pending = pending_responses.lock().await;
-                                    if let Some(tx) = pending.remove(&response.response.request_id)
+                                    // DashMap remove returns Option<(K, V)>
+                                    if let Some((_, tx)) =
+                                        pending_responses.remove(&response.response.request_id)
                                     {
                                         let _ = tx.send(response.response.data);
                                     }
@@ -197,14 +202,14 @@ impl QueryFull {
                                 if let Ok(request) = serde_json::from_value::<IncomingControlRequest>(
                                     message.clone(),
                                 ) {
-                                    let stdin_clone = stdin.clone();
+                                    let transport_clone = Arc::clone(&transport_for_hooks);
                                     let hook_callbacks_clone = Arc::clone(&hook_callbacks);
                                     let sdk_mcp_servers_clone = Arc::clone(&sdk_mcp_servers);
 
                                     tokio::spawn(async move {
-                                        if let Err(e) = Self::handle_control_request_with_stdin(
+                                        if let Err(e) = Self::handle_control_request(
                                             request,
-                                            stdin_clone,
+                                            transport_clone,
                                             hook_callbacks_clone,
                                             sdk_mcp_servers_clone,
                                         )
@@ -224,6 +229,9 @@ impl QueryFull {
                     Err(_) => break,
                 }
             }
+
+            // Signal that background task has completed
+            let _ = shutdown_tx.send(());
         });
 
         // Wait for background task to be ready before returning
@@ -231,15 +239,15 @@ impl QueryFull {
             .await
             .map_err(|_| ClaudeError::Transport("Background task failed to start".to_string()))?;
 
-        Ok(())
+        Ok(shutdown_rx)
     }
 
-    /// Handle incoming control request from CLI (new version using stdin directly)
-    async fn handle_control_request_with_stdin(
+    /// Handle incoming control request from CLI
+    async fn handle_control_request(
         request: IncomingControlRequest,
-        stdin: Option<Arc<Mutex<Option<tokio::process::ChildStdin>>>>,
-        hook_callbacks: Arc<Mutex<HashMap<String, HookCallback>>>,
-        sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
+        transport: Arc<dyn Transport>,
+        hook_callbacks: Arc<DashMap<String, HookCallback>>,
+        sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
     ) -> Result<()> {
         let request_id = request.request_id;
         let request_data = request.request;
@@ -259,13 +267,16 @@ impl QueryFull {
                         ClaudeError::ControlProtocol("Missing callback_id".to_string())
                     })?;
 
-                let callbacks = hook_callbacks.lock().await;
-                let callback = callbacks.get(callback_id).ok_or_else(|| {
-                    ClaudeError::ControlProtocol(format!(
-                        "Hook callback not found: {}",
-                        callback_id
-                    ))
-                })?;
+                // Clone the callback Arc to release the DashMap guard before async call
+                let callback = hook_callbacks
+                    .get(callback_id)
+                    .map(|r| r.clone())
+                    .ok_or_else(|| {
+                        ClaudeError::ControlProtocol(format!(
+                            "Hook callback not found: {}",
+                            callback_id
+                        ))
+                    })?;
 
                 // Parse hook input
                 let input_json = request_data.get("input").cloned().unwrap_or(json!({}));
@@ -329,30 +340,8 @@ impl QueryFull {
         let response_str = serde_json::to_string(&response)
             .map_err(|e| ClaudeError::Transport(format!("Failed to serialize response: {}", e)))?;
 
-        // Write directly to stdin (bypasses transport lock)
-        if let Some(ref stdin_arc) = stdin {
-            let mut stdin_guard = stdin_arc.lock().await;
-            if let Some(ref mut stdin_stream) = *stdin_guard {
-                use tokio::io::AsyncWriteExt;
-                stdin_stream
-                    .write_all(response_str.as_bytes())
-                    .await
-                    .map_err(|e| {
-                        ClaudeError::Transport(format!("Failed to write control response: {}", e))
-                    })?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
-                stdin_stream
-                    .flush()
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
-            } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
-            }
-        } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
-        }
+        // Write via transport - stdin/stdout have separate locks, no deadlock
+        transport.write(&response_str).await?;
 
         Ok(())
     }
@@ -367,10 +356,7 @@ impl QueryFull {
 
         // Create oneshot channel for response
         let (tx, rx) = oneshot::channel();
-        self.pending_responses
-            .lock()
-            .await
-            .insert(request_id.clone(), tx);
+        self.pending_responses.insert(request_id.clone(), tx);
 
         // Build and send request
         let control_request = json!({
@@ -382,29 +368,8 @@ impl QueryFull {
         let request_str = serde_json::to_string(&control_request)
             .map_err(|e| ClaudeError::Transport(format!("Failed to serialize request: {}", e)))?;
 
-        // Write directly to stdin (bypasses transport lock held by background reader)
-        if let Some(ref stdin) = self.stdin {
-            let mut stdin_guard = stdin.lock().await;
-            if let Some(ref mut stdin_stream) = *stdin_guard {
-                stdin_stream
-                    .write_all(request_str.as_bytes())
-                    .await
-                    .map_err(|e| {
-                        ClaudeError::Transport(format!("Failed to write control request: {}", e))
-                    })?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
-                stdin_stream
-                    .flush()
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
-            } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
-            }
-        } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
-        }
+        // Write via transport - stdin/stdout have separate locks, no deadlock
+        self.transport.write(&request_str).await?;
 
         // Wait for response
         let response = rx.await.map_err(|_| {
@@ -418,9 +383,9 @@ impl QueryFull {
     #[allow(dead_code)]
     pub async fn receive_messages(&self) -> Vec<serde_json::Value> {
         let mut messages = Vec::new();
-        let mut rx = self.message_rx.lock().await;
+        let rx = self.message_rx.clone();
 
-        while let Some(message) = rx.recv().await {
+        while let Ok(message) = rx.recv_async().await {
             messages.push(message);
         }
 
@@ -493,20 +458,24 @@ impl QueryFull {
     ///
     /// Returns the initialization result that was obtained during connect().
     /// This includes information about available commands, output styles, and server capabilities.
-    pub async fn get_initialization_result(&self) -> Option<serde_json::Value> {
-        self.initialization_result.lock().await.clone()
+    /// This is lock-free since initialization_result uses OnceLock.
+    pub fn get_initialization_result(&self) -> Option<serde_json::Value> {
+        self.initialization_result.get().cloned()
     }
 
     /// Handle SDK MCP request by routing to the appropriate server
     async fn handle_sdk_mcp_request(
-        sdk_mcp_servers: Arc<Mutex<HashMap<String, McpSdkServerConfig>>>,
+        sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
         server_name: &str,
         message: serde_json::Value,
     ) -> Result<serde_json::Value> {
-        let servers = sdk_mcp_servers.lock().await;
-        let server_config = servers.get(server_name).ok_or_else(|| {
-            ClaudeError::ControlProtocol(format!("SDK MCP server not found: {}", server_name))
-        })?;
+        // Clone the server config to release the DashMap guard before async call
+        let server_config = sdk_mcp_servers
+            .get(server_name)
+            .map(|r| r.clone())
+            .ok_or_else(|| {
+                ClaudeError::ControlProtocol(format!("SDK MCP server not found: {}", server_name))
+            })?;
 
         // Call the server's handle_message method
         server_config

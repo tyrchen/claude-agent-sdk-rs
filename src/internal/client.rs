@@ -23,7 +23,7 @@ impl InternalClient {
     }
 
     /// Connect and get messages
-    pub async fn execute(mut self) -> Result<Vec<Message>> {
+    pub async fn execute(self) -> Result<Vec<Message>> {
         // Connect
         self.transport.connect().await?;
 

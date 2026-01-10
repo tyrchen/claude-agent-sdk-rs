@@ -128,6 +128,17 @@ pub struct ClaudeAgentOptions {
     /// using `ClaudeClient.rewind_files()`.
     #[builder(default = false)]
     pub enable_file_checkpointing: bool,
+
+    /// Skip CLI version check on connect (default: false).
+    /// When true, saves ~100-500ms by skipping the version compatibility check.
+    /// Use when you know the CLI version is compatible.
+    #[builder(default = false)]
+    pub skip_version_check: bool,
+
+    /// Enable verbose CLI output (default: true).
+    /// Set to false to potentially improve throughput by reducing CLI logging overhead.
+    #[builder(default = true)]
+    pub verbose: bool,
 }
 
 impl Default for ClaudeAgentOptions {

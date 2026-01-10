@@ -31,6 +31,12 @@ futures = "0.3"
 pin-project = "1.1"
 async-stream = "0.3"
 
+# Fast lock-free channel
+flume = "0.12"
+
+# Concurrent hash map
+dashmap = "6"
+
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

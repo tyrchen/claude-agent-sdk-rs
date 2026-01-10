@@ -96,7 +96,7 @@ pub async fn query_stream(
     let query_prompt = QueryPrompt::Text(prompt.into());
     let opts = options.unwrap_or_default();
 
-    let mut transport = SubprocessTransport::new(query_prompt, opts)?;
+    let transport = SubprocessTransport::new(query_prompt, opts)?;
     transport.connect().await?;
 
     // Move transport into the stream to extend its lifetime
@@ -232,7 +232,7 @@ pub async fn query_stream_with_content(
     let query_prompt = QueryPrompt::Content(content_blocks);
     let opts = options.unwrap_or_default();
 
-    let mut transport = SubprocessTransport::new(query_prompt, opts)?;
+    let transport = SubprocessTransport::new(query_prompt, opts)?;
     transport.connect().await?;
 
     let stream = async_stream::stream! {
