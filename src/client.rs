@@ -4,7 +4,6 @@ use futures::stream::Stream;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex as TokioMutex;
 
 use crate::errors::{ClaudeError, Result};
 use crate::internal::message_parser::MessageParser;
@@ -52,7 +51,8 @@ use crate::types::messages::{Message, UserContentBlock};
 /// ```
 pub struct ClaudeClient {
     options: ClaudeAgentOptions,
-    query: Option<Arc<TokioMutex<QueryFull>>>,
+    /// Query state - all internal fields are already synchronized (DashMap, Mutex, Atomic, etc.)
+    query: Option<Arc<QueryFull>>,
     /// Shutdown receiver - signals when background task completes
     shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
     connected: bool,
@@ -192,7 +192,7 @@ impl ClaudeClient {
         // Initialize with hooks (sends control request)
         query.initialize(hooks).await?;
 
-        self.query = Some(Arc::new(TokioMutex::new(query)));
+        self.query = Some(Arc::new(query));
         self.shutdown_rx = Some(shutdown_rx);
         self.connected = true;
 
@@ -282,31 +282,27 @@ impl ClaudeClient {
             ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
         })?;
 
-        // Write directly to stdin (bypasses transport lock)
-        let query_guard = query.lock().await;
-        let stdin = query_guard.stdin.clone();
-        drop(query_guard);
-
-        if let Some(stdin_arc) = stdin {
-            let mut stdin_guard = stdin_arc.lock().await;
-            if let Some(ref mut stdin_stream) = *stdin_guard {
-                stdin_stream
-                    .write_all(message_str.as_bytes())
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
-                stdin_stream
-                    .flush()
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
-            } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
-            }
-        } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
-        }
+        // Write directly to stdin - no outer lock needed, stdin has its own Mutex
+        let stdin_arc = query
+            .stdin
+            .as_ref()
+            .ok_or_else(|| ClaudeError::Transport("stdin not set".to_string()))?;
+        let mut stdin_guard = stdin_arc.lock().await;
+        let stdin_stream = stdin_guard
+            .as_mut()
+            .ok_or_else(|| ClaudeError::Transport("stdin not available".to_string()))?;
+        stdin_stream
+            .write_all(message_str.as_bytes())
+            .await
+            .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
+        stdin_stream
+            .write_all(b"\n")
+            .await
+            .map_err(|e| ClaudeError::Transport(format!("Failed to write newline: {}", e)))?;
+        stdin_stream
+            .flush()
+            .await
+            .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
 
         Ok(())
     }
@@ -415,31 +411,27 @@ impl ClaudeClient {
             ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
         })?;
 
-        // Write directly to stdin (bypasses transport lock)
-        let query_guard = query.lock().await;
-        let stdin = query_guard.stdin.clone();
-        drop(query_guard);
-
-        if let Some(stdin_arc) = stdin {
-            let mut stdin_guard = stdin_arc.lock().await;
-            if let Some(ref mut stdin_stream) = *stdin_guard {
-                stdin_stream
-                    .write_all(message_str.as_bytes())
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
-                stdin_stream.write_all(b"\n").await.map_err(|e| {
-                    ClaudeError::Transport(format!("Failed to write newline: {}", e))
-                })?;
-                stdin_stream
-                    .flush()
-                    .await
-                    .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
-            } else {
-                return Err(ClaudeError::Transport("stdin not available".to_string()));
-            }
-        } else {
-            return Err(ClaudeError::Transport("stdin not set".to_string()));
-        }
+        // Write directly to stdin - no outer lock needed, stdin has its own Mutex
+        let stdin_arc = query
+            .stdin
+            .as_ref()
+            .ok_or_else(|| ClaudeError::Transport("stdin not set".to_string()))?;
+        let mut stdin_guard = stdin_arc.lock().await;
+        let stdin_stream = stdin_guard
+            .as_mut()
+            .ok_or_else(|| ClaudeError::Transport("stdin not available".to_string()))?;
+        stdin_stream
+            .write_all(message_str.as_bytes())
+            .await
+            .map_err(|e| ClaudeError::Transport(format!("Failed to write query: {}", e)))?;
+        stdin_stream
+            .write_all(b"\n")
+            .await
+            .map_err(|e| ClaudeError::Transport(format!("Failed to write newline: {}", e)))?;
+        stdin_stream
+            .flush()
+            .await
+            .map_err(|e| ClaudeError::Transport(format!("Failed to flush: {}", e)))?;
 
         Ok(())
     }
@@ -487,10 +479,8 @@ impl ClaudeClient {
 
         Box::pin(async_stream::stream! {
             // Clone the receiver - flume receivers are cloneable and lock-free
-            let rx = {
-                let query_guard = query.lock().await;
-                query_guard.message_rx.clone()
-            };
+            // No outer lock needed - message_rx is already accessible via Arc
+            let rx = query.message_rx.clone();
 
             // No mutex needed - flume receiver is lock-free
             while let Ok(json) = rx.recv_async().await {
@@ -552,10 +542,8 @@ impl ClaudeClient {
 
         Box::pin(async_stream::stream! {
             // Clone the receiver - flume receivers are cloneable and lock-free
-            let rx = {
-                let query_guard = query.lock().await;
-                query_guard.message_rx.clone()
-            };
+            // No outer lock needed - message_rx is already accessible via Arc
+            let rx = query.message_rx.clone();
 
             // No mutex needed - flume receiver is lock-free
             while let Ok(json) = rx.recv_async().await {
@@ -585,8 +573,7 @@ impl ClaudeClient {
             ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
         })?;
 
-        let query_guard = query.lock().await;
-        query_guard.interrupt().await
+        query.interrupt().await
     }
 
     /// Change the permission mode dynamically
@@ -605,8 +592,7 @@ impl ClaudeClient {
             ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
         })?;
 
-        let query_guard = query.lock().await;
-        query_guard.set_permission_mode(mode).await
+        query.set_permission_mode(mode).await
     }
 
     /// Change the AI model dynamically
@@ -625,8 +611,7 @@ impl ClaudeClient {
             ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
         })?;
 
-        let query_guard = query.lock().await;
-        query_guard.set_model(model).await
+        query.set_model(model).await
     }
 
     /// Rewind tracked files to their state at a specific user message.
@@ -688,8 +673,7 @@ impl ClaudeClient {
             ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
         })?;
 
-        let query_guard = query.lock().await;
-        query_guard.rewind_files(user_message_id).await
+        query.rewind_files(user_message_id).await
     }
 
     /// Get server initialization info including available commands and output styles
@@ -713,17 +697,16 @@ impl ClaudeClient {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
     /// # client.connect().await?;
-    /// if let Some(info) = client.get_server_info().await {
+    /// if let Some(info) = client.get_server_info() {
     ///     println!("Commands available: {}", info.get("commands").map(|c| c.as_array().map(|a| a.len()).unwrap_or(0)).unwrap_or(0));
     ///     println!("Output style: {:?}", info.get("output_style"));
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_server_info(&self) -> Option<serde_json::Value> {
+    pub fn get_server_info(&self) -> Option<serde_json::Value> {
         let query = self.query.as_ref()?;
-        let query_guard = query.lock().await;
-        query_guard.get_initialization_result()
+        query.get_initialization_result()
     }
 
     /// Start a new session by switching to a different session ID
@@ -783,17 +766,14 @@ impl ClaudeClient {
         self.connected = false;
 
         if let Some(query) = self.query.take() {
-            // Close stdin first (using direct access) to signal CLI to exit
+            // Close stdin first to signal CLI to exit
             // This will cause the background task to finish and release transport lock
-            let query_guard = query.lock().await;
-            if let Some(ref stdin_arc) = query_guard.stdin {
+            if let Some(ref stdin_arc) = query.stdin {
                 let mut stdin_guard = stdin_arc.lock().await;
                 if let Some(mut stdin_stream) = stdin_guard.take() {
                     let _ = stdin_stream.shutdown().await;
                 }
             }
-            let transport = Arc::clone(&query_guard.transport);
-            drop(query_guard);
 
             // Wait for background task to complete with timeout instead of fixed sleep
             // This is much faster than the previous 100ms hardcoded sleep
@@ -802,7 +782,7 @@ impl ClaudeClient {
                 let _ = tokio::time::timeout(std::time::Duration::from_millis(500), rx).await;
             }
 
-            let mut transport_guard = transport.lock().await;
+            let mut transport_guard = query.transport.lock().await;
             transport_guard.close().await?;
         }
 

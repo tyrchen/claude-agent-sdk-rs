@@ -315,7 +315,7 @@ async fn example_control_protocol() -> Result<(), Box<dyn std::error::Error>> {
 
     // 1. Get server initialization info
     println!("1. Getting server info...");
-    let server_info = client.get_server_info().await;
+    let server_info = client.get_server_info();
 
     if let Some(info) = server_info {
         println!("✓ Server info retrieved successfully!");

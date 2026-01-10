@@ -313,7 +313,7 @@ async fn test_get_server_info() -> anyhow::Result<()> {
     client.connect().await?;
 
     // Get server info
-    let info = client.get_server_info().await;
+    let info = client.get_server_info();
     assert!(info.is_some(), "Should have server info in streaming mode");
 
     if let Some(server_info) = info {

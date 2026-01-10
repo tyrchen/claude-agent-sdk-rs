@@ -17,7 +17,7 @@ This document compares the Rust and Python Claude Agent SDKs to track feature pa
 | **Interrupt** | `await client.interrupt()` | `client.interrupt().await?` | ✅ | |
 | **Set Permission Mode** | `await client.set_permission_mode(mode)` | `client.set_permission_mode(mode).await?` | ✅ | |
 | **Set Model** | `await client.set_model(model)` | `client.set_model(model).await?` | ✅ | |
-| **Get Server Info** | `await client.get_server_info()` | `client.get_server_info().await` | ✅ | |
+| **Get Server Info** | `await client.get_server_info()` | `client.get_server_info()` | ✅ | Sync - uses OnceLock |
 | **Disconnect** | `await client.disconnect()` | `client.disconnect().await?` | ✅ | |
 | **Context Manager** | `async with ClaudeSDKClient()` | Manual connect/disconnect | ✅ | Rust uses RAII pattern |
 | **One-shot Query** | `query(prompt, options)` | `query(prompt, options).await?` | ✅ | |
