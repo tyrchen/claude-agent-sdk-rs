@@ -7,19 +7,11 @@ All notable changes to this project will be documented in this file. See [conven
 
 ### Bug Fixes
 
-- fix `tools` vs `allowed_tools` usage in examples - use `tools` to restrict available tools, `allowed_tools` for MCP tool permissions
-- force `--verbose` flag when using `--output-format=stream-json` (CLI requirement)
+- correct tools vs allowed_tools usage and bump to v0.6.1 - ([b034c81](https://github.com/commit/b034c81805d338fc3f5663a35dffcd27eae1f37d)) - Tyr Chen
 
-### Documentation
+### Other
 
-- add documentation explaining `tools` vs `allowed_tools` difference in README.md and README_zh-CN.md
-- update `verbose` config field documentation to note it's currently ignored
-
-### Examples
-
-- update all examples to use `tools` instead of `allowed_tools` for restricting built-in tools
-- add `model("sonnet")` to all examples to reduce API costs
-- add `skip_version_check(true)` to hello_world example
+- Update CHANGELOG.md - ([3820ffe](https://github.com/commit/3820ffe09efc6e50223bc5d988a55e1b2638fffa)) - Tyr Chen
 
 ---
 ## [0.6.0](https://github.com/compare/v0.5.1..v0.6.0) - 2026-01-10
