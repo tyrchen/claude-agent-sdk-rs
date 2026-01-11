@@ -136,7 +136,9 @@ pub struct ClaudeAgentOptions {
     pub skip_version_check: bool,
 
     /// Enable verbose CLI output (default: true).
-    /// Set to false to potentially improve throughput by reducing CLI logging overhead.
+    ///
+    /// **Note:** This option is currently ignored because the SDK uses `--output-format=stream-json`
+    /// which requires `--verbose` to be enabled. The CLI enforces this constraint.
     #[builder(default = true)]
     pub verbose: bool,
 }

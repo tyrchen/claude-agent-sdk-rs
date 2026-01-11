@@ -12,7 +12,7 @@ use std::path::Path;
 
 use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, ContentBlock, HookContext, HookInput, HookJsonOutput,
-    HookSpecificOutput, Hooks, Message, PreToolUseHookSpecificOutput, SyncHookJsonOutput,
+    HookSpecificOutput, Hooks, Message, PreToolUseHookSpecificOutput, SyncHookJsonOutput, Tools,
 };
 use futures::StreamExt;
 
@@ -123,7 +123,8 @@ async fn main() -> anyhow::Result<()> {
     hooks.add_pre_tool_use_with_matcher("Bash", block_dangerous_bash);
 
     let options = ClaudeAgentOptions::builder()
-        .allowed_tools(vec!["Write".to_string(), "Bash".to_string()])
+        .tools(Tools::List(vec!["Write".to_string(), "Bash".to_string()]))
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .permission_mode(claude_agent_sdk_rs::PermissionMode::AcceptEdits)
         .cwd(Path::new("./fixtures"))
         .hooks(hooks.build())

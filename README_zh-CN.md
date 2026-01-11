@@ -79,14 +79,45 @@ async fn main() -> anyhow::Result<()> {
 使用自定义选项:
 
 ```rust
+use claude_agent_sdk_rs::{ClaudeAgentOptions, Tools, query};
+
 let options = ClaudeAgentOptions {
-    model: Some("claude-sonnet-4-5".to_string()),
+    model: Some("sonnet".to_string()),  // 使用 Sonnet 降低成本
     max_turns: Some(5),
-    allowed_tools: vec!["Read".to_string(), "Write".to_string()],
+    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string()])),
     ..Default::default()
 };
 
 let messages = query("创建一个 hello.txt 文件", Some(options)).await?;
+```
+
+### 工具配置：`tools` vs `allowed_tools`
+
+SDK 提供两个不同的工具配置参数：
+
+| 参数 | CLI 标志 | 用途 |
+|-----------|----------|---------|
+| `tools` | `--tools` | **限制** Claude 可以使用的工具 |
+| `allowed_tools` | `--allowedTools` | **授权** 特定工具的权限（主要用于 MCP 工具） |
+
+**使用 `tools`** 来限制 Claude 只能使用特定的内置工具：
+
+```rust
+// Claude 只能使用 Read、Write 和 Bash
+let options = ClaudeAgentOptions {
+    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string(), "Bash".to_string()])),
+    ..Default::default()
+};
+```
+
+**使用 `allowed_tools`** 来授权自定义 MCP 工具：
+
+```rust
+// 授权自定义 MCP 工具（格式：mcp__{服务器}__{工具}）
+let options = ClaudeAgentOptions {
+    allowed_tools: vec!["mcp__my-tools__greet".to_string()],
+    ..Default::default()
+};
 ```
 
 ### 双向对话（多轮）
@@ -182,9 +213,13 @@ async fn main() -> anyhow::Result<()> {
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert("my-tools".to_string(), McpServerConfig::Sdk(server));
 
+    // 注意：MCP 工具使用 `allowed_tools`（不是 `tools`）
+    // - allowed_tools: 授权自定义 MCP 工具
+    // - tools: 限制内置工具（Read、Write、Bash 等）
     let options = ClaudeAgentOptions {
         mcp_servers: McpServers::Dict(mcp_servers),
         allowed_tools: vec!["mcp__my-tools__greet".to_string()],
+        model: Some("sonnet".to_string()),  // 使用 Sonnet 降低成本
         permission_mode: Some(PermissionMode::AcceptEdits),
         ..Default::default()
     };
@@ -296,7 +331,8 @@ query(prompt: &str, options: Option<ClaudeAgentOptions>) -> Vec<Message>
 ClaudeAgentOptions {
     model: Option<String>,
     max_turns: Option<u32>,
-    allowed_tools: Vec<String>,
+    tools: Option<Tools>,                // 限制可用工具 (--tools)
+    allowed_tools: Vec<String>,          // 授权 MCP 工具权限 (--allowedTools)
     system_prompt: Option<SystemPromptConfig>,
     hooks: Option<HashMap<String, Vec<HookMatcher>>>,
     mcp_servers: Option<HashMap<String, McpServer>>,

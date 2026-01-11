@@ -36,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Configure options for the examples
     let options = ClaudeAgentOptions::builder()
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .permission_mode(PermissionMode::BypassPermissions)
         .max_turns(1)
         .build();

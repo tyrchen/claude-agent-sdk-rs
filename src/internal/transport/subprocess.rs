@@ -225,10 +225,10 @@ impl SubprocessTransport {
     fn build_command(&self) -> Vec<String> {
         let mut args = vec!["--output-format".to_string(), "stream-json".to_string()];
 
-        // Only add verbose flag if enabled (default: true)
-        if self.options.verbose {
-            args.push("--verbose".to_string());
-        }
+        // --verbose is REQUIRED when using --output-format=stream-json
+        // CLI enforces this: "When using --print, --output-format=stream-json requires --verbose"
+        // So we always add --verbose regardless of the options.verbose setting
+        args.push("--verbose".to_string());
 
         // For streaming mode or content mode, enable stream-json input
         if matches!(

@@ -239,12 +239,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let options = ClaudeAgentOptions {
         mcp_servers: McpServers::Dict(mcp_servers),
-        // IMPORTANT: Tools must be explicitly allowed with format mcp__{server_name}__{tool_name}
+        // IMPORTANT: MCP tools must be explicitly allowed with format mcp__{server_name}__{tool_name}
+        // Note: Use `allowed_tools` for MCP tools (not `tools` which is for built-in tools)
         allowed_tools: vec![
             "mcp__math-tools__calculator".to_string(),
             "mcp__math-tools__statistics".to_string(),
             "mcp__math-tools__random_number".to_string(),
         ],
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         max_turns: Some(10),
         permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         ..Default::default()

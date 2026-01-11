@@ -35,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create options with stderr callback and enable debug mode
     let options = ClaudeAgentOptions {
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         stderr_callback: Some(Arc::new(stderr_callback)),
         extra_args,
         max_turns: Some(3),

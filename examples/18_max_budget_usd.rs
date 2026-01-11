@@ -23,6 +23,7 @@ async fn main() -> anyhow::Result<()> {
     // Configure with a budget limit
     let budget = 1.0; // $1.00 maximum
     let options = ClaudeAgentOptions::builder()
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .max_budget_usd(budget)
         .permission_mode(PermissionMode::BypassPermissions)
         .max_turns(5)

@@ -15,7 +15,7 @@
 use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, ContentBlock, HookContext, HookEvent, HookInput,
     HookJsonOutput, HookMatcher, HookSpecificOutput, Message, PostToolUseHookSpecificOutput,
-    PreToolUseHookSpecificOutput, SyncHookJsonOutput, UserPromptSubmitHookSpecificOutput,
+    PreToolUseHookSpecificOutput, SyncHookJsonOutput, Tools, UserPromptSubmitHookSpecificOutput,
 };
 use futures::StreamExt;
 use std::collections::HashMap;
@@ -256,7 +256,8 @@ async fn example_pretooluse() -> anyhow::Result<()> {
     );
 
     let options = ClaudeAgentOptions {
-        allowed_tools: vec!["Bash".to_string()],
+        tools: Some(Tools::List(vec!["Bash".to_string()])),
+        model: Some("sonnet".to_string()),
         hooks: Some(hooks),
         max_turns: Some(5),
         ..Default::default()
@@ -398,7 +399,8 @@ async fn example_posttooluse() -> anyhow::Result<()> {
     );
 
     let options = ClaudeAgentOptions {
-        allowed_tools: vec!["Bash".to_string()],
+        tools: Some(Tools::List(vec!["Bash".to_string()])),
+        model: Some("sonnet".to_string()),
         hooks: Some(hooks),
         max_turns: Some(5),
         ..Default::default()
@@ -457,7 +459,8 @@ async fn example_decision_fields() -> anyhow::Result<()> {
     );
 
     let options = ClaudeAgentOptions {
-        allowed_tools: vec!["Write".to_string(), "Bash".to_string()],
+        tools: Some(Tools::List(vec!["Write".to_string(), "Bash".to_string()])),
+        model: Some("sonnet".to_string()),
         hooks: Some(hooks),
         max_turns: Some(5),
         ..Default::default()
@@ -543,7 +546,8 @@ async fn example_continue_control() -> anyhow::Result<()> {
     );
 
     let options = ClaudeAgentOptions {
-        allowed_tools: vec!["Bash".to_string()],
+        tools: Some(Tools::List(vec!["Bash".to_string()])),
+        model: Some("sonnet".to_string()),
         hooks: Some(hooks),
         max_turns: Some(5),
         ..Default::default()

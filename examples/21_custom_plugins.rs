@@ -27,6 +27,7 @@ async fn main() -> anyhow::Result<()> {
     println!("--- Example 1: Single Plugin ---\n");
 
     let _single_plugin_options = ClaudeAgentOptions::builder()
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .plugins(vec![SdkPluginConfig::local("./my-plugin")])
         .permission_mode(PermissionMode::BypassPermissions)
         .max_turns(3)
@@ -43,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
     println!("--- Example 2: Multiple Plugins ---\n");
 
     let _multi_plugin_options = ClaudeAgentOptions::builder()
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .plugins(vec![
             SdkPluginConfig::local("./plugins/database-tools"),
             SdkPluginConfig::local("./plugins/api-integration"),
@@ -67,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
         println!("Test plugin found at: {}", test_plugin_path);
 
         let options = ClaudeAgentOptions::builder()
+            .model("sonnet".to_string()) // Use Sonnet for lower cost
             .plugins(vec![SdkPluginConfig::local(test_plugin_path)])
             .permission_mode(PermissionMode::BypassPermissions)
             .max_turns(3)

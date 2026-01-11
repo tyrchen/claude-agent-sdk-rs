@@ -8,7 +8,7 @@
 //! 2. Saves it to ./fixtures/hello.py
 //! 3. Runs the script to verify it works
 
-use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, Tools, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,14 +17,17 @@ async fn main() -> anyhow::Result<()> {
     // Create output directory
     std::fs::create_dir_all("./fixtures")?;
 
-    // Configure options to allow Write tool using the builder pattern
+    // Configure options using the builder pattern
+    // Note: Use .tools() to restrict available tools, not .allowed_tools()
+    // - tools: Limits which tools Claude can use (maps to --tools CLI flag)
+    // - allowed_tools: Adds extra tool permissions (maps to --allowedTools CLI flag)
     let options = ClaudeAgentOptions::builder()
-        .allowed_tools(vec!["Write".to_string()])
+        .model("sonnet".to_string())
+        .tools(Tools::List(vec!["Write".to_string()]))
         .permission_mode(claude_agent_sdk_rs::PermissionMode::AcceptEdits)
-        .max_turns(5)
-        .stderr_callback(std::sync::Arc::new(|msg| {
-            eprintln!("STDERR: {}", msg);
-        }))
+        .max_turns(3)
+        .skip_version_check(true)
+        .verbose(false) // Note: This is currently ignored as stream-json requires verbose
         .build();
 
     println!("Asking Claude to write a Python hello world script...\n");

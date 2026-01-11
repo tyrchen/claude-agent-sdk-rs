@@ -29,7 +29,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Example 1: Use different session IDs to maintain separate contexts
 async fn example_separate_sessions() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    let options = ClaudeAgentOptions {
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
+        ..Default::default()
+    };
+    let mut client = ClaudeClient::new(options);
     client.connect().await?;
 
     // Session 1: Math conversation
@@ -97,6 +101,7 @@ async fn example_separate_sessions() -> Result<(), Box<dyn std::error::Error>> {
 async fn example_fork_session() -> Result<(), Box<dyn std::error::Error>> {
     // Create options with fork_session enabled
     let options = ClaudeAgentOptions::builder()
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .fork_session(true)
         .max_turns(1)
         .build();
@@ -128,7 +133,11 @@ async fn example_fork_session() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Example 3: Use new_session() convenience method
 async fn example_dynamic_switching() -> Result<(), Box<dyn std::error::Error>> {
-    let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+    let options = ClaudeAgentOptions {
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
+        ..Default::default()
+    };
+    let mut client = ClaudeClient::new(options);
     client.connect().await?;
 
     // Start first conversation

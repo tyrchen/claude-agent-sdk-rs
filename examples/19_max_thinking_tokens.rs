@@ -27,6 +27,7 @@ async fn main() -> anyhow::Result<()> {
     // Note: API requires minimum of 1024 thinking tokens
     let max_thinking = 2048;
     let options = ClaudeAgentOptions::builder()
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .max_thinking_tokens(max_thinking)
         .permission_mode(PermissionMode::BypassPermissions)
         .max_turns(3)

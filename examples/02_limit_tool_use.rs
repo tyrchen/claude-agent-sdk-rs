@@ -9,7 +9,7 @@
 //! 2. Only allows the Write tool (not Edit)
 //! 3. Shows that Claude can create files but cannot edit them
 
-use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, Tools, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,8 +22,12 @@ async fn main() -> anyhow::Result<()> {
     println!("--------------------------------------------------------");
 
     // Configure options to only allow Write tool
+    // Note: Use `tools` to restrict available tools, not `allowed_tools`
+    // - tools: Limits which tools Claude can use (maps to --tools CLI flag)
+    // - allowed_tools: Adds extra tool permissions for MCP tools (maps to --allowedTools CLI flag)
     let options = ClaudeAgentOptions {
-        allowed_tools: vec!["Write".to_string()],
+        tools: Some(Tools::List(vec!["Write".to_string()])),
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         max_turns: Some(3),
         ..Default::default()
@@ -80,9 +84,10 @@ async fn main() -> anyhow::Result<()> {
     println!("--------------------------------------------------------");
 
     // Now try to edit the file without Edit tool
+    // Using `tools` to specify only Write and Read (excluding Edit)
     let options2 = ClaudeAgentOptions {
-        allowed_tools: vec!["Write".to_string(), "Read".to_string()],
-        disallowed_tools: vec!["Edit".to_string()],
+        tools: Some(Tools::List(vec!["Write".to_string(), "Read".to_string()])),
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         max_turns: Some(3),
         ..Default::default()

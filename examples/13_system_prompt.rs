@@ -44,6 +44,7 @@ async fn string_system_prompt() -> anyhow::Result<()> {
         system_prompt: Some(SystemPrompt::Text(
             "You are a pirate assistant. Respond in pirate speak.".to_string(),
         )),
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         ..Default::default()
     };
 
@@ -61,6 +62,7 @@ async fn preset_system_prompt() -> anyhow::Result<()> {
 
     let options = ClaudeAgentOptions {
         system_prompt: Some(SystemPrompt::Preset(SystemPromptPreset::new("claude_code"))),
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         ..Default::default()
     };
 
@@ -81,6 +83,7 @@ async fn preset_with_append() -> anyhow::Result<()> {
             "claude_code",
             "Always end your response with a fun fact.",
         ))),
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         ..Default::default()
     };
 

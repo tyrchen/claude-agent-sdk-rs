@@ -80,14 +80,45 @@ async fn main() -> anyhow::Result<()> {
 With custom options:
 
 ```rust
+use claude_agent_sdk_rs::{ClaudeAgentOptions, Tools, query};
+
 let options = ClaudeAgentOptions {
-    model: Some("claude-sonnet-4-5".to_string()),
+    model: Some("sonnet".to_string()),  // Use Sonnet for lower cost
     max_turns: Some(5),
-    allowed_tools: vec!["Read".to_string(), "Write".to_string()],
+    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string()])),
     ..Default::default()
 };
 
 let messages = query("Create a hello.txt file", Some(options)).await?;
+```
+
+### Tool Configuration: `tools` vs `allowed_tools`
+
+The SDK provides two different parameters for tool configuration:
+
+| Parameter | CLI Flag | Purpose |
+|-----------|----------|---------|
+| `tools` | `--tools` | **Restricts** which tools Claude can use |
+| `allowed_tools` | `--allowedTools` | **Adds permissions** for specific tools (mainly for MCP tools) |
+
+**Use `tools`** when you want to limit Claude to specific built-in tools:
+
+```rust
+// Claude can ONLY use Read, Write, and Bash
+let options = ClaudeAgentOptions {
+    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string(), "Bash".to_string()])),
+    ..Default::default()
+};
+```
+
+**Use `allowed_tools`** when you need to grant permission for custom MCP tools:
+
+```rust
+// Allow custom MCP tools (format: mcp__{server}__{tool})
+let options = ClaudeAgentOptions {
+    allowed_tools: vec!["mcp__my-tools__greet".to_string()],
+    ..Default::default()
+};
 ```
 
 ### Streaming Query (Memory-Efficient)
@@ -216,9 +247,13 @@ async fn main() -> anyhow::Result<()> {
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert("my-tools".to_string(), McpServerConfig::Sdk(server));
 
+    // Note: Use `allowed_tools` for MCP tools (not `tools`)
+    // - allowed_tools: Grants permission for custom MCP tools
+    // - tools: Restricts built-in tools (Read, Write, Bash, etc.)
     let options = ClaudeAgentOptions {
         mcp_servers: McpServers::Dict(mcp_servers),
         allowed_tools: vec!["mcp__my-tools__greet".to_string()],
+        model: Some("sonnet".to_string()),  // Use Sonnet for lower cost
         permission_mode: Some(PermissionMode::AcceptEdits),
         ..Default::default()
     };
@@ -235,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-**Note**: Tools must be explicitly allowed using the format `mcp__{server_name}__{tool_name}`.
+**Note**: MCP tools must be explicitly allowed using `allowed_tools` with format `mcp__{server_name}__{tool_name}`.
 
 For a comprehensive guide, see [examples/MCP_INTEGRATION.md](examples/MCP_INTEGRATION.md).
 
@@ -396,12 +431,13 @@ query_stream_with_content(content: Vec<UserContentBlock>, options: Option<Claude
 // Configuration
 ClaudeAgentOptions {
     model: Option<String>,
-    fallback_model: Option<String>,      // NEW: Backup model for reliability
-    max_budget_usd: Option<f64>,         // NEW: Cost control
-    max_thinking_tokens: Option<u32>,    // NEW: Extended thinking limit
-    plugins: Vec<SdkPluginConfig>,       // NEW: Custom plugin loading
+    fallback_model: Option<String>,      // Backup model for reliability
+    max_budget_usd: Option<f64>,         // Cost control
+    max_thinking_tokens: Option<u32>,    // Extended thinking limit
+    plugins: Vec<SdkPluginConfig>,       // Custom plugin loading
     max_turns: Option<u32>,
-    allowed_tools: Vec<String>,
+    tools: Option<Tools>,                // Restrict available tools (--tools)
+    allowed_tools: Vec<String>,          // Grant MCP tool permissions (--allowedTools)
     system_prompt: Option<SystemPromptConfig>,
     hooks: Option<HashMap<String, Vec<HookMatcher>>>,
     mcp_servers: Option<HashMap<String, McpServer>>,

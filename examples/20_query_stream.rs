@@ -19,7 +19,7 @@
 //! - Simpler code when memory isn't a concern
 
 use claude_agent_sdk_rs::{
-    ClaudeAgentOptions, ContentBlock, Message, PermissionMode, query_stream,
+    ClaudeAgentOptions, ContentBlock, Message, PermissionMode, Tools, query_stream,
 };
 use futures::stream::StreamExt;
 
@@ -28,8 +28,10 @@ async fn main() -> anyhow::Result<()> {
     println!("=== Example 20: Streaming Query API ===\n");
 
     // Configure options
+    // Note: Use .tools() to restrict available tools (not .allowed_tools())
     let options = ClaudeAgentOptions::builder()
-        .allowed_tools(vec!["Bash".to_string()])
+        .tools(Tools::List(vec!["Bash".to_string()]))
+        .model("sonnet".to_string()) // Use Sonnet for lower cost
         .permission_mode(PermissionMode::BypassPermissions)
         .max_turns(5)
         .build();

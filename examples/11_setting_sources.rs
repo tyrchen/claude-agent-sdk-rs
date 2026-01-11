@@ -72,6 +72,7 @@ async fn example_default() -> anyhow::Result<()> {
     println!("Expected: No custom slash commands will be available\n");
 
     let options = ClaudeAgentOptions {
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         cwd: Some(std::path::PathBuf::from(".")),
         max_turns: Some(1),
         ..Default::default()
@@ -115,6 +116,7 @@ async fn example_user_only() -> anyhow::Result<()> {
     println!("Expected: Project slash commands (like /commit) will NOT be available\n");
 
     let options = ClaudeAgentOptions {
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         setting_sources: Some(vec![SettingSource::User]),
         cwd: Some(std::path::PathBuf::from(".")),
         max_turns: Some(1),
@@ -159,6 +161,7 @@ async fn example_project_and_user() -> anyhow::Result<()> {
     println!("Expected: Project slash commands (like /commit) WILL be available\n");
 
     let options = ClaudeAgentOptions {
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         setting_sources: Some(vec![SettingSource::User, SettingSource::Project]),
         cwd: Some(std::path::PathBuf::from(".")),
         max_turns: Some(1),

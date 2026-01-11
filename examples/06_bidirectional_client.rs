@@ -24,6 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create client with options
     let options = ClaudeAgentOptions {
+        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         max_turns: Some(5),
         ..Default::default()
     };
