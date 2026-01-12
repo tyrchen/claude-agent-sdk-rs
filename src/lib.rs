@@ -244,6 +244,7 @@ pub mod version;
 pub use errors::{ClaudeError, ImageValidationError, Result};
 pub use types::{
     config::*,
+    efficiency::{EfficiencyConfig, ExecutionMetrics, MetricsSummary},
     hooks::*,
     mcp::{
         McpServerConfig, McpServers, SdkMcpServer, SdkMcpTool, ToolHandler, ToolResult,

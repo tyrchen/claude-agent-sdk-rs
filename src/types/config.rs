@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use typed_builder::TypedBuilder;
 
+use super::efficiency::EfficiencyConfig;
 use super::hooks::{HookEvent, HookMatcher};
 use super::mcp::McpServers;
 use super::permissions::CanUseToolCallback;
@@ -141,6 +142,25 @@ pub struct ClaudeAgentOptions {
     /// which requires `--verbose` to be enabled. The CLI enforces this constraint.
     #[builder(default = true)]
     pub verbose: bool,
+
+    /// Efficiency configuration for built-in efficiency hooks.
+    ///
+    /// When configured, the SDK automatically injects hooks to:
+    /// - Remind about working directory at prompt submission
+    /// - Track execution metrics (edits per file, build attempts, etc.)
+    /// - Provide efficiency feedback and warnings when execution stops
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use claude_agent_sdk_rs::{ClaudeAgentOptions, EfficiencyConfig};
+    ///
+    /// let options = ClaudeAgentOptions::builder()
+    ///     .efficiency(EfficiencyConfig::enabled())
+    ///     .build();
+    /// ```
+    #[builder(default, setter(strip_option))]
+    pub efficiency: Option<EfficiencyConfig>,
 }
 
 impl Default for ClaudeAgentOptions {

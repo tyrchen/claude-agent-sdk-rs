@@ -10,6 +10,7 @@ use crate::internal::query_full::QueryFull;
 use crate::internal::transport::subprocess::QueryPrompt;
 use crate::internal::transport::{SubprocessTransport, Transport};
 use crate::types::config::{ClaudeAgentOptions, PermissionMode};
+use crate::types::efficiency::{build_efficiency_hooks, merge_hooks};
 use crate::types::hooks::HookEvent;
 use crate::types::messages::{Message, UserContentBlock};
 
@@ -161,8 +162,19 @@ impl ClaudeClient {
             };
         query.set_sdk_mcp_servers(sdk_mcp_servers);
 
+        // Build efficiency hooks if configured
+        let efficiency_hooks = self
+            .options
+            .efficiency
+            .as_ref()
+            .map(build_efficiency_hooks)
+            .unwrap_or_default();
+
+        // Merge user hooks with efficiency hooks
+        let merged_hooks = merge_hooks(self.options.hooks.clone(), efficiency_hooks);
+
         // Convert hooks to internal format
-        let hooks = self.options.hooks.as_ref().map(|hooks_map| {
+        let hooks = merged_hooks.as_ref().map(|hooks_map| {
             hooks_map
                 .iter()
                 .map(|(event, matchers)| {
