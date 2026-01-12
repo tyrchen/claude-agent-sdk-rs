@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.6.2](https://github.com/compare/v0.6.1..v0.6.2) - 2026-01-12
+
+### Features
+
+- add efficiency hooks for execution optimization (#9) - ([e67cdab](https://github.com/commit/e67cdaba3f4bfea8f38c8bf5e68616ad3d497122)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([ae3b017](https://github.com/commit/ae3b017b2c7304ed66a4d0f42dd9d0d42b3c3bd8)) - Tyr Chen
+
+---
 ## [0.6.1](https://github.com/compare/v0.6.0..v0.6.1) - 2026-01-11
 
 ### Bug Fixes
