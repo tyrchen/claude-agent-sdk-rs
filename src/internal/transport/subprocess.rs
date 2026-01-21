@@ -455,20 +455,30 @@ impl SubprocessTransport {
                             );
                         }
                         crate::types::mcp::McpServerConfig::Stdio(stdio_config) => {
-                            // For stdio servers, serialize the full config
-                            if let Ok(value) = serde_json::to_value(stdio_config) {
+                            // For stdio servers, serialize with type field
+                            // Note: type is optional for backwards compatibility
+                            if let Ok(mut value) = serde_json::to_value(stdio_config) {
+                                if let Some(obj) = value.as_object_mut() {
+                                    obj.insert("type".to_string(), serde_json::json!("stdio"));
+                                }
                                 servers_for_cli.insert(name.clone(), value);
                             }
                         }
                         crate::types::mcp::McpServerConfig::Sse(sse_config) => {
-                            // For SSE servers, serialize the full config
-                            if let Ok(value) = serde_json::to_value(sse_config) {
+                            // For SSE servers, serialize with required type field
+                            if let Ok(mut value) = serde_json::to_value(sse_config) {
+                                if let Some(obj) = value.as_object_mut() {
+                                    obj.insert("type".to_string(), serde_json::json!("sse"));
+                                }
                                 servers_for_cli.insert(name.clone(), value);
                             }
                         }
                         crate::types::mcp::McpServerConfig::Http(http_config) => {
-                            // For HTTP servers, serialize the full config
-                            if let Ok(value) = serde_json::to_value(http_config) {
+                            // For HTTP servers, serialize with required type field
+                            if let Ok(mut value) = serde_json::to_value(http_config) {
+                                if let Some(obj) = value.as_object_mut() {
+                                    obj.insert("type".to_string(), serde_json::json!("http"));
+                                }
                                 servers_for_cli.insert(name.clone(), value);
                             }
                         }
