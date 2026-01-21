@@ -437,6 +437,61 @@ impl SubprocessTransport {
             args.push(dir.display().to_string());
         }
 
+        // Add MCP servers configuration
+        match &self.options.mcp_servers {
+            crate::types::mcp::McpServers::Dict(servers) => {
+                let mut servers_for_cli = serde_json::Map::new();
+
+                for (name, config) in servers {
+                    match config {
+                        crate::types::mcp::McpServerConfig::Sdk(sdk_config) => {
+                            // For SDK servers, pass type and name (instance stays in Rust)
+                            servers_for_cli.insert(
+                                name.clone(),
+                                serde_json::json!({
+                                    "type": "sdk",
+                                    "name": sdk_config.name
+                                })
+                            );
+                        }
+                        crate::types::mcp::McpServerConfig::Stdio(stdio_config) => {
+                            // For stdio servers, serialize the full config
+                            if let Ok(value) = serde_json::to_value(stdio_config) {
+                                servers_for_cli.insert(name.clone(), value);
+                            }
+                        }
+                        crate::types::mcp::McpServerConfig::Sse(sse_config) => {
+                            // For SSE servers, serialize the full config
+                            if let Ok(value) = serde_json::to_value(sse_config) {
+                                servers_for_cli.insert(name.clone(), value);
+                            }
+                        }
+                        crate::types::mcp::McpServerConfig::Http(http_config) => {
+                            // For HTTP servers, serialize the full config
+                            if let Ok(value) = serde_json::to_value(http_config) {
+                                servers_for_cli.insert(name.clone(), value);
+                            }
+                        }
+                    }
+                }
+
+                if !servers_for_cli.is_empty() {
+                    args.push("--mcp-config".to_string());
+                    args.push(
+                        serde_json::json!({"mcpServers": servers_for_cli}).to_string()
+                    );
+                }
+            }
+            crate::types::mcp::McpServers::Path(path) => {
+                // Path to config file - pass directly
+                args.push("--mcp-config".to_string());
+                args.push(path.display().to_string());
+            }
+            crate::types::mcp::McpServers::Empty => {
+                // No MCP servers configured
+            }
+        }
+
         // Add extra args
         for (key, value) in &self.options.extra_args {
             args.push(format!("--{}", key));

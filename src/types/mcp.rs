@@ -162,22 +162,28 @@ impl SdkMcpServer for DefaultSdkMcpServer {
             .as_str()
             .ok_or_else(|| crate::errors::ClaudeError::Transport("Missing method".to_string()))?;
 
+        let message_id = message.get("id").cloned();
+
         match method {
             "initialize" => {
-                // Return server info
+                // Return JSONRPC response for initialize
                 Ok(serde_json::json!({
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {}
-                    },
-                    "serverInfo": {
-                        "name": self.name,
-                        "version": self.version
+                    "jsonrpc": "2.0",
+                    "id": message_id,
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {
+                            "tools": {}
+                        },
+                        "serverInfo": {
+                            "name": self.name,
+                            "version": self.version
+                        }
                     }
                 }))
             }
             "tools/list" => {
-                // Return list of tools
+                // Return list of tools in JSONRPC format
                 let tools: Vec<_> = self
                     .tools
                     .values()
@@ -191,7 +197,11 @@ impl SdkMcpServer for DefaultSdkMcpServer {
                     .collect();
 
                 Ok(serde_json::json!({
-                    "tools": tools
+                    "jsonrpc": "2.0",
+                    "id": message_id,
+                    "result": {
+                        "tools": tools
+                    }
                 }))
             }
             "tools/call" => {
@@ -209,9 +219,18 @@ impl SdkMcpServer for DefaultSdkMcpServer {
                 let result = tool.handler.handle(arguments).await?;
 
                 Ok(serde_json::json!({
-                    "content": result.content,
-                    "isError": result.is_error
+                    "jsonrpc": "2.0",
+                    "id": message_id,
+                    "result": {
+                        "content": result.content,
+                        "isError": result.is_error
+                    }
                 }))
+            }
+            "notifications/initialized" | "notifications/cancelled" => {
+                // Notifications don't require a response
+                // Return null for notifications
+                Ok(serde_json::json!(null))
             }
             _ => Err(crate::errors::ClaudeError::Transport(format!(
                 "Unknown method: {}",
