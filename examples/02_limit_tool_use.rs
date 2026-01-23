@@ -9,7 +9,7 @@
 //! 2. Only allows the Write tool (not Edit)
 //! 3. Shows that Claude can create files but cannot edit them
 
-use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, Tools, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,6 +17,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Create output directory
     std::fs::create_dir_all("./fixtures")?;
+    if std::path::Path::new("./fixtures/calculator.py").exists() {
+        println!("Removing existing ./fixtures/calculator.py file\n");
+        std::fs::remove_file("./fixtures/calculator.py")?;
+    }
 
     println!("Test 1: With Write tool - should succeed\n");
     println!("--------------------------------------------------------");
@@ -26,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
     // - tools: Limits which tools Claude can use (maps to --tools CLI flag)
     // - allowed_tools: Adds extra tool permissions for MCP tools (maps to --allowedTools CLI flag)
     let options = ClaudeAgentOptions {
-        tools: Some(Tools::List(vec!["Write".to_string()])),
+        tools: Some(["Write"].into()),
         model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         max_turns: Some(3),
@@ -73,20 +77,23 @@ async fn main() -> anyhow::Result<()> {
     println!("\n--------------------------------------------------------");
     println!("Tools used: {:?}", tool_uses);
 
-    // Check if file was created
-    if std::path::Path::new("./fixtures/calculator.py").exists() {
+    // Check if file was created and record its modification time
+    let file_path = std::path::Path::new("./fixtures/calculator.py");
+    let original_modified_time = if file_path.exists() {
         println!("✓ File created successfully with Write tool");
+        Some(std::fs::metadata(file_path)?.modified()?)
     } else {
         println!("✗ File was not created");
-    }
+        None
+    };
 
-    println!("\n\nTest 2: Without Edit tool - attempt to modify existing file\n");
+    println!("\n\nTest 2: Without Write tool - attempt to modify existing file\n");
     println!("--------------------------------------------------------");
 
-    // Now try to edit the file without Edit tool
-    // Using `tools` to specify only Write and Read (excluding Edit)
+    // Now try to edit the file without Edit or Write tool
+    // Using `tools` to specify only Read
     let options2 = ClaudeAgentOptions {
-        tools: Some(Tools::List(vec!["Write".to_string(), "Read".to_string()])),
+        tools: Some(["Read"].into()),
         model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         max_turns: Some(3),
@@ -123,15 +130,21 @@ async fn main() -> anyhow::Result<()> {
     println!("\n--------------------------------------------------------");
     println!("Tools used: {:?}", tool_uses2);
 
-    if tool_uses2.contains(&"Edit".to_string()) {
-        println!("✗ UNEXPECTED: Edit tool was used despite being disallowed!");
+    // Verify file content doesn't contain "multiply"
+    let file_content = std::fs::read_to_string(file_path)?;
+    if file_content.to_lowercase().contains("multiply") {
+        println!("✗ UNEXPECTED: File contains 'multiply' - it was modified!");
     } else {
-        println!("✓ CORRECT: Edit tool was not used (as expected)");
-        if claude_response.to_lowercase().contains("edit")
-            || claude_response.to_lowercase().contains("modify")
-            || claude_response.to_lowercase().contains("cannot")
-        {
-            println!("✓ Claude acknowledged the limitation");
+        println!("✓ CORRECT: File does not contain 'multiply' (unchanged)");
+    }
+
+    // Verify file was not modified by checking the last modified time
+    if let Some(original_time) = original_modified_time {
+        let current_modified_time = std::fs::metadata(file_path)?.modified()?;
+        if current_modified_time == original_time {
+            println!("✓ CORRECT: File modification time unchanged");
+        } else {
+            println!("✗ UNEXPECTED: File modification time changed!");
         }
     }
 

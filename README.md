@@ -56,7 +56,7 @@ cargo add tokio --features full
 ### Simple Query (One-shot)
 
 ```rust
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{query, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -80,12 +80,12 @@ async fn main() -> anyhow::Result<()> {
 With custom options:
 
 ```rust
-use claude_agent_sdk_rs::{ClaudeAgentOptions, Tools, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, query};
 
 let options = ClaudeAgentOptions {
     model: Some("sonnet".to_string()),  // Use Sonnet for lower cost
     max_turns: Some(5),
-    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string()])),
+    tools: Some(["Read", "Write"].into()),
     ..Default::default()
 };
 
@@ -106,7 +106,7 @@ The SDK provides two different parameters for tool configuration:
 ```rust
 // Claude can ONLY use Read, Write, and Bash
 let options = ClaudeAgentOptions {
-    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string(), "Bash".to_string()])),
+    tools: Some(["Read", "Write", "Bash"].into()),
     ..Default::default()
 };
 ```

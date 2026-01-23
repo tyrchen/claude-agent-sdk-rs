@@ -13,7 +13,7 @@
 //! cargo run --example 14_streaming_mode basic_streaming - Run a specific example
 
 use claude_agent_sdk_rs::{
-    ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, ToolResultContent, Tools,
+    ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, ToolResultContent,
 };
 use futures::StreamExt;
 use std::env;
@@ -119,7 +119,7 @@ async fn example_with_options() -> Result<(), Box<dyn std::error::Error>> {
     // Configure options
     // Note: Use `tools` to restrict available tools (not `allowed_tools`)
     let options = ClaudeAgentOptions {
-        tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string()])), // Allow file operations
+        tools: Some(["Read", "Write"].into()), // Allow file operations
         model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         system_prompt: Some("You are a helpful coding assistant.".into()),
         ..Default::default()

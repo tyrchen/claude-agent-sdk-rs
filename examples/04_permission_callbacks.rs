@@ -21,7 +21,7 @@
 
 use claude_agent_sdk_rs::{
     ClaudeAgentOptions, ClaudeClient, ContentBlock, Message, PermissionResult,
-    PermissionResultDeny, ToolPermissionContext, Tools,
+    PermissionResultDeny, ToolPermissionContext,
 };
 use futures::{FutureExt, StreamExt, future::BoxFuture};
 use std::collections::HashMap;
@@ -145,11 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configure options with permission callback
     // Note: Use `tools` to restrict available tools (not `allowed_tools`)
     let options = ClaudeAgentOptions {
-        tools: Some(Tools::List(vec![
-            "Write".to_string(),
-            "Read".to_string(),
-            "Bash".to_string(),
-        ])),
+        tools: Some(["Write", "Read", "Bash"].into()),
         model: Some("sonnet".to_string()), // Use Sonnet for lower cost
         permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         can_use_tool: Some(permission_callback),

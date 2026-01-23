@@ -79,12 +79,12 @@ async fn main() -> anyhow::Result<()> {
 使用自定义选项:
 
 ```rust
-use claude_agent_sdk_rs::{ClaudeAgentOptions, Tools, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, query};
 
 let options = ClaudeAgentOptions {
     model: Some("sonnet".to_string()),  // 使用 Sonnet 降低成本
     max_turns: Some(5),
-    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string()])),
+    tools: Some(["Read", "Write"].into()),
     ..Default::default()
 };
 
@@ -105,7 +105,7 @@ SDK 提供两个不同的工具配置参数：
 ```rust
 // Claude 只能使用 Read、Write 和 Bash
 let options = ClaudeAgentOptions {
-    tools: Some(Tools::List(vec!["Read".to_string(), "Write".to_string(), "Bash".to_string()])),
+    tools: Some(["Read", "Write", "Bash"].into()),
     ..Default::default()
 };
 ```

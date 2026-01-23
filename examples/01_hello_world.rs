@@ -8,7 +8,7 @@
 //! 2. Saves it to ./fixtures/hello.py
 //! 3. Runs the script to verify it works
 
-use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, Tools, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, query};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -22,8 +22,8 @@ async fn main() -> anyhow::Result<()> {
     // - tools: Limits which tools Claude can use (maps to --tools CLI flag)
     // - allowed_tools: Adds extra tool permissions (maps to --allowedTools CLI flag)
     let options = ClaudeAgentOptions::builder()
-        .model("sonnet".to_string())
-        .tools(Tools::List(vec!["Write".to_string()]))
+        .model("opus")
+        .tools(["Write"])
         .permission_mode(claude_agent_sdk_rs::PermissionMode::AcceptEdits)
         .max_turns(3)
         .skip_version_check(true)
