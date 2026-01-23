@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     // - tools: Limits which tools Claude can use (maps to --tools CLI flag)
     // - allowed_tools: Adds extra tool permissions (maps to --allowedTools CLI flag)
     let options = ClaudeAgentOptions::builder()
-        .model("opus")
+        .model("sonnet")
         .tools(["Write"])
         .permission_mode(claude_agent_sdk_rs::PermissionMode::AcceptEdits)
         .max_turns(3)
