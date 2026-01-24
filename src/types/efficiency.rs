@@ -282,8 +282,7 @@ pub fn build_efficiency_hooks(config: &EfficiencyConfig) -> HashMap<HookEvent, V
     }
 
     // Add PostToolUse hook for metrics collection
-    if config.track_metrics && config.metrics.is_some() {
-        let metrics = config.metrics.as_ref().unwrap();
+    if let Some(metrics) = config.metrics.as_ref().filter(|_| config.track_metrics) {
         let callback = create_post_tool_use_hook(Arc::clone(metrics));
         hooks.insert(
             HookEvent::PostToolUse,
