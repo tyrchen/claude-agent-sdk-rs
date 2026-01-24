@@ -12,7 +12,7 @@
 //! - Code generation helpers
 
 use claude_agent_sdk_rs::{
-    ClaudeAgentOptions, ClaudeClient, Message, PermissionMode, SdkPluginConfig, Tools,
+    ClaudeAgentOptions, ClaudeClient, Message, PermissionMode, SdkPluginConfig,
 };
 use futures::StreamExt;
 
@@ -44,12 +44,7 @@ async fn main() -> anyhow::Result<()> {
     let options = ClaudeAgentOptions::builder()
         .plugins(plugins)
         // Restrict Claude to specific tools plus plugin tools
-        .tools(Tools::List(vec![
-            "Read".to_string(),
-            "Write".to_string(),
-            "Bash".to_string(),
-            // Plugin tools would be available as well
-        ]))
+        .tools(["Read", "Write", "Bash"])
         .model("sonnet".to_string()) // Use Sonnet for lower cost
         .permission_mode(PermissionMode::Default) // Ask for permission
         .max_turns(10)

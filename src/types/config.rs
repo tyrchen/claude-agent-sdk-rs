@@ -17,7 +17,7 @@ use super::plugin::SdkPluginConfig;
 #[builder(doc)]
 pub struct ClaudeAgentOptions {
     /// Tools configuration (list of tool names or preset)
-    #[builder(default, setter(strip_option))]
+    #[builder(default, setter(into, strip_option))]
     pub tools: Option<Tools>,
     /// List of allowed tool names
     #[builder(default, setter(into))]
@@ -320,6 +320,45 @@ pub struct ToolsPreset {
     pub preset: String,
 }
 
+// Conversion implementations for Tools to allow ergonomic API usage
+// e.g., .tools(["Write"]) instead of .tools(Tools::from(vec!["Write"]))
+
+impl From<Vec<String>> for Tools {
+    fn from(list: Vec<String>) -> Self {
+        Tools::List(list)
+    }
+}
+
+impl From<Vec<&str>> for Tools {
+    fn from(list: Vec<&str>) -> Self {
+        Tools::List(list.into_iter().map(String::from).collect())
+    }
+}
+
+impl<const N: usize> From<[&str; N]> for Tools {
+    fn from(arr: [&str; N]) -> Self {
+        Tools::List(arr.into_iter().map(String::from).collect())
+    }
+}
+
+impl<const N: usize> From<[String; N]> for Tools {
+    fn from(arr: [String; N]) -> Self {
+        Tools::List(arr.into_iter().collect())
+    }
+}
+
+impl From<&[&str]> for Tools {
+    fn from(slice: &[&str]) -> Self {
+        Tools::List(slice.iter().map(|s| s.to_string()).collect())
+    }
+}
+
+impl From<ToolsPreset> for Tools {
+    fn from(preset: ToolsPreset) -> Self {
+        Tools::Preset(preset)
+    }
+}
+
 impl ToolsPreset {
     /// Create a new tools preset
     pub fn new(preset: impl Into<String>) -> Self {
@@ -441,4 +480,128 @@ pub struct SandboxSettings {
     )]
     #[builder(default, setter(strip_option))]
     pub enable_weaker_nested_sandbox: Option<bool>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tools_from_str_array() {
+        let tools: Tools = ["Write", "Read", "Bash"].into();
+        match tools {
+            Tools::List(list) => {
+                assert_eq!(list, vec!["Write", "Read", "Bash"]);
+            }
+            _ => panic!("Expected Tools::List"),
+        }
+    }
+
+    #[test]
+    fn test_tools_from_single_str_array() {
+        let tools: Tools = ["Write"].into();
+        match tools {
+            Tools::List(list) => {
+                assert_eq!(list, vec!["Write"]);
+            }
+            _ => panic!("Expected Tools::List"),
+        }
+    }
+
+    #[test]
+    fn test_tools_from_empty_str_array() {
+        let empty: [&str; 0] = [];
+        let tools: Tools = empty.into();
+        match tools {
+            Tools::List(list) => {
+                assert!(list.is_empty());
+            }
+            _ => panic!("Expected Tools::List"),
+        }
+    }
+
+    #[test]
+    fn test_tools_from_str_slice() {
+        let arr: &[&str] = &["Edit", "Read"];
+        let tools: Tools = arr.into();
+        match tools {
+            Tools::List(list) => {
+                assert_eq!(list, vec!["Edit", "Read"]);
+            }
+            _ => panic!("Expected Tools::List"),
+        }
+    }
+
+    #[test]
+    fn test_tools_from_vec_str() {
+        let tools: Tools = vec!["Write", "Read"].into();
+        match tools {
+            Tools::List(list) => {
+                assert_eq!(list, vec!["Write", "Read"]);
+            }
+            _ => panic!("Expected Tools::List"),
+        }
+    }
+
+    #[test]
+    fn test_tools_from_vec_string() {
+        let tools: Tools = vec!["Write".to_string(), "Read".to_string()].into();
+        match tools {
+            Tools::List(list) => {
+                assert_eq!(list, vec!["Write", "Read"]);
+            }
+            _ => panic!("Expected Tools::List"),
+        }
+    }
+
+    #[test]
+    fn test_tools_from_string_array() {
+        let tools: Tools = ["Write".to_string(), "Read".to_string()].into();
+        match tools {
+            Tools::List(list) => {
+                assert_eq!(list, vec!["Write", "Read"]);
+            }
+            _ => panic!("Expected Tools::List"),
+        }
+    }
+
+    #[test]
+    fn test_tools_in_options_builder() {
+        let options = ClaudeAgentOptions::builder()
+            .tools(["Write", "Read", "Bash"])
+            .build();
+        match options.tools {
+            Some(Tools::List(list)) => {
+                assert_eq!(list, vec!["Write", "Read", "Bash"]);
+            }
+            _ => panic!("Expected Some(Tools::List)"),
+        }
+    }
+
+    #[test]
+    fn test_tools_in_options_struct() {
+        let options = ClaudeAgentOptions {
+            tools: Some(["Edit", "Read"].into()),
+            ..Default::default()
+        };
+        match options.tools {
+            Some(Tools::List(list)) => {
+                assert_eq!(list, vec!["Edit", "Read"]);
+            }
+            _ => panic!("Expected Some(Tools::List)"),
+        }
+    }
+
+    #[test]
+    fn test_tools_preset() {
+        let preset = ToolsPreset::claude_code();
+        let tools: Tools = preset.into();
+        match tools {
+            Tools::Preset(p) => {
+                assert_eq!(p.preset, "claude_code");
+                assert_eq!(p.type_, "preset");
+            }
+            _ => panic!("Expected Tools::Preset"),
+        }
+    }
 }

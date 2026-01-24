@@ -1,6 +1,6 @@
 [package]
 name = "claude-agent-sdk-rs"
-version = "0.6.2"
+version = "0.6.3"
 authors = ["Tyr Chen <tyr.chen@gmail.com>"]
 edition = "2024"
 rust-version = "1.90"
@@ -11,7 +11,7 @@ homepage = "https://github.com/tyrchen/claude-agent-sdk-rs"
 description = "Rust SDK for Claude Code CLI with bidirectional streaming, hooks, custom tools, and plugin support - 100% feature parity with Python SDK"
 readme = "README.md"
 categories = ["development-tools", "api-bindings", "asynchronous"]
-keywords = ["claude", "ai", "agent", "anthropic", "llm"]
+keywords = ["claude", "ai", "agent", "anthropic", "llm", "sdk"]
 include = ["src/**/*.rs", "Cargo.toml", "LICENSE", "README.md"]
 
 [dependencies]
