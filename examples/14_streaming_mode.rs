@@ -120,7 +120,7 @@ async fn example_with_options() -> Result<(), Box<dyn std::error::Error>> {
     // Note: Use `tools` to restrict available tools (not `allowed_tools`)
     let options = ClaudeAgentOptions {
         tools: Some(["Read", "Write"].into()), // Allow file operations
-        model: Some("sonnet".to_string()), // Use Sonnet for lower cost
+        model: Some("sonnet".to_string()),     // Use Sonnet for lower cost
         system_prompt: Some("You are a helpful coding assistant.".into()),
         ..Default::default()
     };

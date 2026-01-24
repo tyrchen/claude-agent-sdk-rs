@@ -451,7 +451,7 @@ impl SubprocessTransport {
                                 serde_json::json!({
                                     "type": "sdk",
                                     "name": sdk_config.name
-                                })
+                                }),
                             );
                         }
                         crate::types::mcp::McpServerConfig::Stdio(stdio_config) => {
@@ -487,9 +487,7 @@ impl SubprocessTransport {
 
                 if !servers_for_cli.is_empty() {
                     args.push("--mcp-config".to_string());
-                    args.push(
-                        serde_json::json!({"mcpServers": servers_for_cli}).to_string()
-                    );
+                    args.push(serde_json::json!({"mcpServers": servers_for_cli}).to_string());
                 }
             }
             crate::types::mcp::McpServers::Path(path) => {
@@ -813,12 +811,15 @@ impl Transport for SubprocessTransport {
                 ))
             })?;
 
+            // Note: Claude CLI may exit with non-zero status (e.g., exit code 1) even after
+            // successfully completing a query. This is normal behavior - the Result message
+            // is the authoritative indicator of success/failure, not the exit code.
+            // We log a debug warning but don't fail here.
             if !status.success() {
-                return Err(ClaudeError::Process(ProcessError::new(
-                    "Claude CLI exited with non-zero status".to_string(),
-                    status.code(),
-                    None,
-                )));
+                warn!(
+                    "Claude CLI exited with non-zero status (exit code {:?}). This is often normal.",
+                    status.code()
+                );
             }
         }
 

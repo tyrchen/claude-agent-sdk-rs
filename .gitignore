@@ -3,3 +3,4 @@ Cargo.lock
 .vscode
 __pycache__/
 .tda-worktrees
+.claude/settings.json

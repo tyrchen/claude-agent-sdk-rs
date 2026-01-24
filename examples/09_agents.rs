@@ -7,6 +7,10 @@
 //! 1. Defines custom agents (code-reviewer, doc-writer, analyzer)
 //! 2. Shows how to configure agents with specific tools and prompts
 //! 3. Demonstrates using multiple agents in a single session
+//!
+//! NOTE: This example may fail with "tool_use ids must be unique" API error.
+//! This is a known issue in Claude Code CLI when spawning sub-agents via Task tool.
+//! Keeping this example to monitor when the CLI fix is released.
 
 use claude_agent_sdk_rs::{
     AgentDefinition, AgentModel, ClaudeAgentOptions, ContentBlock, Message, SettingSource, query,
@@ -16,6 +20,8 @@ use std::collections::HashMap;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("=== Custom Agents Examples ===\n");
+    println!("NOTE: These examples may fail with 'tool_use ids must be unique' error.");
+    println!("This is a known Claude Code CLI bug when spawning sub-agents.\n");
 
     code_reviewer_example().await?;
     documentation_writer_example().await?;
@@ -44,7 +50,7 @@ async fn code_reviewer_example() -> anyhow::Result<()> {
 
     let options = ClaudeAgentOptions::builder()
         .agents(agents)
-        .max_turns(5)
+        .max_turns(3)
         .build();
 
     let messages = query(
@@ -82,7 +88,7 @@ async fn documentation_writer_example() -> anyhow::Result<()> {
 
     let options = ClaudeAgentOptions::builder()
         .agents(agents)
-        .max_turns(5)
+        .max_turns(3)
         .build();
 
     let messages = query(
@@ -130,7 +136,7 @@ async fn multiple_agents_example() -> anyhow::Result<()> {
     let options = ClaudeAgentOptions::builder()
         .agents(agents)
         .setting_sources(vec![SettingSource::User, SettingSource::Project])
-        .max_turns(5)
+        .max_turns(3)
         .build();
 
     let messages = query(
