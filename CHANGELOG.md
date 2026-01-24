@@ -3,6 +3,114 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.6.3](https://github.com/compare/v0.6.2..v0.6.3) - 2026-01-24
+
+### Bug Fixes
+
+- Correctly pass MCP tools config to CLI (#10) - ([d0e59ef](https://github.com/commit/d0e59ef134cf6e4f17db2f60110aa1ffdd49ce52)) - Akshay Kayastha
+
+### Miscellaneous Chores
+
+- fmt and fix ignored tests - ([aeaf6ef](https://github.com/commit/aeaf6ef5055d28c307ffbf16715d92b8c265d6ce)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([b4f05f9](https://github.com/commit/b4f05f9d34db74b83ee5a7c1bd226cbeae683dd5)) - Tyr Chen
+- Two minor changes to Tools (#12)
+
+Made two minor changes while learning this SDK.
+
+## 1. Add ergonomic `From` trait implementations for `Tools` type
+
+```rust
+// Before
+tools: Some(Tools::List(vec!["Write".to_string(), "Read".to_string(), "Bash".to_string()])),
+```
+
+```rust
+// After (Builder mode)
+let options = ClaudeAgentOptions::builder()
+    .tools(["Write", "Read", "Bash"])
+    .model("sonnet")
+    .build();
+```
+
+```rust
+// After (Struct Mode)
+let options = ClaudeAgentOptions {
+    tools: Some(["Write", "Read", "Bash"].into()),
+    model: Some("sonnet".into()),
+    ..Default::default()
+};
+```
+
+## 2. Fix Example 02
+
+The tool use of Claude models (sonnet & opus) are smart enough to use
+`Write` tool (instead of `Edit`) to edit file. As a result, if we check
+content `./fixtures/calculator.py`, `def multiply(a, b)` is actually
+added to it.
+
+**This PR 1) Removed "Write" tool from the list 2) use last modified
+time as checker.**
+
+Note that the tool usage (at least in reporting) seems not sane, since
+both Sonnet and Opus often print:
+```
+Tools used: ["Read", "Read", "Edit"]
+```
+in test 2 (where only “Read” is provided), even though `calculator.py`
+is not modified (see the example below).
+
+<details>
+<summary>Example Output</summary>
+
+```
+=== Example 2: Limit Tool Use ===
+
+Removing existing ./fixtures/calculator.py file
+
+Test 1: With Write tool - should succeed
+
+--------------------------------------------------------
+Claude: I'll create a simple calculator.py file with add and subtract functions in the ./fixtures/ directory.
+Tool used: Write
+Claude: I've created a simple calculator.py file in the ./fixtures/ directory with two basic functions:
+
+1. `add(a, b)` - Returns the sum of two numbers
+2. `subtract(a, b)` - Returns the difference between two numbers (a - b)
+
+The file is now ready to use at fixtures/calculator.py.
+
+=== Result ===
+Duration: 19637ms
+Turns: 2
+Cost: $0.0821
+
+--------------------------------------------------------
+Tools used: ["Write"]
+✓ File created successfully with Write tool
+
+
+Test 2: Without Write tool - attempt to modify existing file
+
+--------------------------------------------------------
+Claude's response:
+I'll read the calculator.py file and then add a multiply function to it.
+Now I'll add a multiply function to the calculator.py file. I'll maintain the same style and structure as the existing functions.
+I see the file contents. Now I'll add the multiply function to it:
+
+
+--------------------------------------------------------
+Tools used: ["Read", "Read", "Edit"]
+✗ UNEXPECTED: Edit tool was used despite being disallowed!
+✓ CORRECT: File does not contain 'multiply' (unchanged)
+✓ CORRECT: File modification time unchanged
+```
+
+</details> - ([b1385ad](https://github.com/commit/b1385ad6ab517fdee7ba8f95a45757dbb39d7a7c)) - hugo-tubi
+
+---
 ## [0.6.2](https://github.com/compare/v0.6.1..v0.6.2) - 2026-01-12
 
 ### Features

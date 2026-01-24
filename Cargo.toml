@@ -11,7 +11,7 @@ homepage = "https://github.com/tyrchen/claude-agent-sdk-rs"
 description = "Rust SDK for Claude Code CLI with bidirectional streaming, hooks, custom tools, and plugin support - 100% feature parity with Python SDK"
 readme = "README.md"
 categories = ["development-tools", "api-bindings", "asynchronous"]
-keywords = ["claude", "ai", "agent", "anthropic", "llm", "sdk"]
+keywords = ["claude", "ai", "agent", "llm", "sdk"]
 include = ["src/**/*.rs", "Cargo.toml", "LICENSE", "README.md"]
 
 [dependencies]
