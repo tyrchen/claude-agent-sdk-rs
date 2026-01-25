@@ -10,7 +10,7 @@ use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use super::scenario::{Scenario, ScenarioBuilder};
+use super::scenario::Scenario;
 use super::transport::{MessageTiming, ScheduledMessage};
 use crate::errors::Result;
 use crate::internal::transport::Transport;
@@ -148,68 +148,75 @@ impl SnapshotPlayer {
     }
 
     /// Convert to a scenario
+    ///
+    /// Note: This creates a basic scenario structure. For more accurate replay
+    /// with timing, use `to_mock_transport()` directly.
     pub fn to_scenario(&self) -> Scenario {
-        let mut builder = ScenarioBuilder::new("snapshot_replay");
+        Scenario {
+            name: "snapshot_replay".to_string(),
+            on_connect: Vec::new(),
+            exchanges: Vec::new(),
+        }
+    }
+
+    /// Create a MockTransport from this snapshot
+    ///
+    /// This directly converts recorded messages to ScheduledMessages with proper timing,
+    /// bypassing the Scenario abstraction for more accurate replay.
+    pub fn to_mock_transport(&self) -> super::MockTransport {
+        let mut scheduled_messages = Vec::new();
         let mut last_offset = 0u64;
-        let mut in_exchange = false;
 
         for msg in &self.snapshot.messages {
             match msg.direction {
                 MessageDirection::Sent => {
-                    // Start a new exchange on each sent message
-                    if in_exchange {
-                        builder = builder.exchange();
-                    }
-                    in_exchange = true;
+                    // Sent messages are queries - we don't emit them, just track timing
                     last_offset = msg.offset_ms;
                 }
                 MessageDirection::Received => {
-                    if !in_exchange {
-                        // Messages before first sent - treat as on_connect
-                        builder = builder.exchange();
-                        in_exchange = true;
-                    }
-
-                    // Add message with timing
+                    // Calculate delay from last message
                     let delay = msg.offset_ms.saturating_sub(last_offset);
                     last_offset = msg.offset_ms;
 
-                    // We need to convert to Message, but for now just use raw JSON
-                    // This is a simplified version - full implementation would parse properly
                     let scheduled = ScheduledMessage {
                         value: msg.content.clone(),
                         timing: if delay > 0 {
                             MessageTiming::Delayed {
                                 base_ms: delay,
-                                jitter_ms: 10,
+                                jitter_ms: 0, // No jitter for replay - preserve exact timing
                             }
                         } else {
                             MessageTiming::Immediate
                         },
                     };
-
-                    // Since we can't easily call respond() with raw JSON,
-                    // we'll build the scenario differently
-                    builder = add_scheduled_message(builder, scheduled);
+                    scheduled_messages.push(scheduled);
                 }
             }
         }
 
-        builder.build()
+        super::MockTransport::new(
+            scheduled_messages,
+            super::transport::TimingConfig::default(),
+        )
     }
 
-    /// Create a MockTransport from this snapshot
-    pub fn to_mock_transport(&self) -> super::MockTransport {
-        super::MockTransport::from_scenario(self.to_scenario())
+    /// Get received messages only (for assertions)
+    pub fn received_messages(&self) -> Vec<&RecordedMessage> {
+        self.snapshot
+            .messages
+            .iter()
+            .filter(|m| m.direction == MessageDirection::Received)
+            .collect()
     }
-}
 
-// Helper to add scheduled message to scenario
-fn add_scheduled_message(builder: ScenarioBuilder, msg: ScheduledMessage) -> ScenarioBuilder {
-    // For raw JSON messages, we need a way to add them directly
-    // This is a workaround - full implementation would need scenario builder changes
-    let _ = msg; // Suppress unused warning
-    builder
+    /// Get sent messages only (for assertions)
+    pub fn sent_messages(&self) -> Vec<&RecordedMessage> {
+        self.snapshot
+            .messages
+            .iter()
+            .filter(|m| m.direction == MessageDirection::Sent)
+            .collect()
+    }
 }
 
 /// A transport that records all traffic while delegating to inner transport
