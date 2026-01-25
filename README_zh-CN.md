@@ -8,32 +8,34 @@
 
 Rust SDK 用于与 Claude Code CLI 交互，提供对 Claude 功能的编程访问，**完全支持双向流式传输**。
 
-**状态**: ✅ **生产就绪** - 与 Python SDK 100% 功能对等
+**状态**: 生产就绪 - 与 Python SDK 100% 功能对等
 
-## ✨ 特性
+## 特性
 
-- 🚀 **简单查询 API**: 用于无状态交互的一次性查询，支持收集和流式两种模式
-- 🔄 **双向流式传输**: 使用 `ClaudeClient` 进行实时流式通信
-- 🎛️ **动态控制**: 中断、更改权限、执行中切换模型
-- 🪝 **钩子系统**: 运行时拦截和控制 Claude 的行为，提供简洁的构建器 API
-- 🛠️ **自定义工具**: 进程内 MCP 服务器，提供简洁的 `tool!` 宏
-- 🔌 **插件系统**: 加载自定义插件以扩展 Claude 的能力
-- 🔐 **权限管理**: 对工具执行的细粒度控制
-- 💰 **成本控制**: 预算限制和后备模型，提供生产可靠性
-- 🧠 **扩展思考**: 配置最大思考令牌数以进行复杂推理
-- 📊 **会话管理**: 使用 fork_session 实现独立上下文和内存清除
-- 🦀 **类型安全**: 强类型的消息、配置、钩子和权限
-- ⚡ **零死锁**: 无锁架构，支持并发读写
-- 📚 **全面示例**: 22 个完整示例涵盖所有功能
-- 🧪 **充分测试**: 广泛的单元测试和集成测试覆盖
+- **简单查询 API**: 用于无状态交互的一次性查询，支持收集和流式两种模式
+- **双向流式传输**: 使用 `ClaudeClient` 进行实时流式通信
+- **动态控制**: 中断、更改权限、执行中切换模型
+- **钩子系统**: 6 种钩子类型（PreToolUse、PostToolUse、UserPromptSubmit、Stop、SubagentStop、PreCompact）
+- **自定义工具**: 进程内 MCP 服务器，提供简洁的 `tool!` 宏
+- **插件系统**: 加载自定义插件以扩展 Claude 的能力
+- **权限管理**: 通过回调对工具执行进行细粒度控制
+- **成本控制**: 预算限制和后备模型，提供生产可靠性
+- **扩展思考**: 配置最大思考令牌数以进行复杂推理
+- **会话管理**: 使用 fork_session 实现独立上下文和内存清除
+- **效率钩子**: 内置执行优化和指标跟踪
+- **类型安全**: 强类型的消息、配置、钩子和权限
+- **零死锁**: 无锁架构，支持并发读写
+- **多模态输入**: 通过 base64 或 URL 发送图片和文本
+- **充分测试**: 广泛的单元测试和集成测试覆盖
+- **24 个示例**: 全面的示例涵盖所有功能
 
-## 📦 安装
+## 安装
 
 在你的 `Cargo.toml` 中添加:
 
 ```toml
 [dependencies]
-claude-agent-sdk-rs = "0.3"
+claude-agent-sdk-rs = "0.6"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -44,18 +46,18 @@ cargo add claude-agent-sdk-rs
 cargo add tokio --features full
 ```
 
-## 🎯 前置要求
+## 前置要求
 
 - **Rust**: 1.90 或更高版本
 - **Claude Code CLI**: 2.0.0 或更高版本 ([安装指南](https://docs.claude.com/claude-code))
 - **API 密钥**: 在环境变量或 Claude Code 配置中设置 Anthropic API 密钥
 
-## 🚀 快速开始
+## 快速开始
 
 ### 简单查询（一次性）
 
 ```rust
-use claude_agent_sdk_rs::{query, ClaudeAgentOptions, Message, ContentBlock};
+use claude_agent_sdk_rs::{query, Message, ContentBlock};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -79,14 +81,14 @@ async fn main() -> anyhow::Result<()> {
 使用自定义选项:
 
 ```rust
-use claude_agent_sdk_rs::{ClaudeAgentOptions, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, query, PermissionMode};
 
-let options = ClaudeAgentOptions {
-    model: Some("sonnet".to_string()),  // 使用 Sonnet 降低成本
-    max_turns: Some(5),
-    tools: Some(["Read", "Write"].into()),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .model("sonnet")
+    .max_turns(5)
+    .tools(["Read", "Write", "Bash"])
+    .permission_mode(PermissionMode::AcceptEdits)
+    .build();
 
 let messages = query("创建一个 hello.txt 文件", Some(options)).await?;
 ```
@@ -96,7 +98,7 @@ let messages = query("创建一个 hello.txt 文件", Some(options)).await?;
 SDK 提供两个不同的工具配置参数：
 
 | 参数 | CLI 标志 | 用途 |
-|-----------|----------|---------|
+|------|----------|------|
 | `tools` | `--tools` | **限制** Claude 可以使用的工具 |
 | `allowed_tools` | `--allowedTools` | **授权** 特定工具的权限（主要用于 MCP 工具） |
 
@@ -104,26 +106,58 @@ SDK 提供两个不同的工具配置参数：
 
 ```rust
 // Claude 只能使用 Read、Write 和 Bash
-let options = ClaudeAgentOptions {
-    tools: Some(["Read", "Write", "Bash"].into()),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .tools(["Read", "Write", "Bash"])
+    .build();
 ```
 
 **使用 `allowed_tools`** 来授权自定义 MCP 工具：
 
 ```rust
 // 授权自定义 MCP 工具（格式：mcp__{服务器}__{工具}）
-let options = ClaudeAgentOptions {
-    allowed_tools: vec!["mcp__my-tools__greet".to_string()],
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .allowed_tools(vec!["mcp__my-tools__greet".to_string()])
+    .build();
 ```
+
+### 流式查询（内存高效）
+
+对于大型对话或实时处理，使用 `query_stream()`:
+
+```rust
+use claude_agent_sdk_rs::{query_stream, Message, ContentBlock};
+use futures::StreamExt;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 获取消息流而不是收集所有消息
+    let mut stream = query_stream("2 + 2 等于多少?", None).await?;
+
+    // 实时处理消息（O(1) 内存）
+    while let Some(result) = stream.next().await {
+        let message = result?;
+        if let Message::Assistant(msg) = message {
+            for block in msg.message.content {
+                if let ContentBlock::Text(text) = block {
+                    println!("Claude: {}", text.text);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+**使用时机:**
+- `query()`: 中小型对话，需要所有消息进行后处理
+- `query_stream()`: 大型对话、实时处理、内存受限
 
 ### 双向对话（多轮）
 
 ```rust
 use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, Message, ContentBlock};
+use futures::StreamExt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -136,38 +170,40 @@ async fn main() -> anyhow::Result<()> {
     client.query("法国的首都是什么?").await?;
 
     // 接收响应
-    loop {
-        match client.receive_message().await? {
-            Some(Message::Assistant(msg)) => {
+    let mut stream = client.receive_response();
+    while let Some(message) = stream.next().await {
+        match message? {
+            Message::Assistant(msg) => {
                 for block in msg.message.content {
                     if let ContentBlock::Text(text) = block {
                         println!("Claude: {}", text.text);
                     }
                 }
             }
-            Some(Message::Result(_)) => break,
-            Some(_) => continue,
-            None => break,
+            Message::Result(_) => break,
+            _ => continue,
         }
     }
+    drop(stream);
 
     // 后续问题 - Claude 会记住上下文！
     client.query("那个城市的人口是多少?").await?;
 
-    loop {
-        match client.receive_message().await? {
-            Some(Message::Assistant(msg)) => {
+    let mut stream = client.receive_response();
+    while let Some(message) = stream.next().await {
+        match message? {
+            Message::Assistant(msg) => {
                 for block in msg.message.content {
                     if let ContentBlock::Text(text) = block {
                         println!("Claude: {}", text.text);
                     }
                 }
             }
-            Some(Message::Result(_)) => break,
-            Some(_) => continue,
-            None => break,
+            Message::Result(_) => break,
+            _ => continue,
         }
     }
+    drop(stream);
 
     client.disconnect().await?;
     Ok(())
@@ -216,13 +252,12 @@ async fn main() -> anyhow::Result<()> {
     // 注意：MCP 工具使用 `allowed_tools`（不是 `tools`）
     // - allowed_tools: 授权自定义 MCP 工具
     // - tools: 限制内置工具（Read、Write、Bash 等）
-    let options = ClaudeAgentOptions {
-        mcp_servers: McpServers::Dict(mcp_servers),
-        allowed_tools: vec!["mcp__my-tools__greet".to_string()],
-        model: Some("sonnet".to_string()),  // 使用 Sonnet 降低成本
-        permission_mode: Some(PermissionMode::AcceptEdits),
-        ..Default::default()
-    };
+    let options = ClaudeAgentOptions::builder()
+        .mcp_servers(McpServers::Dict(mcp_servers))
+        .allowed_tools(vec!["mcp__my-tools__greet".to_string()])
+        .model("sonnet")
+        .permission_mode(PermissionMode::AcceptEdits)
+        .build();
 
     let mut client = ClaudeClient::new(options);
     client.connect().await?;
@@ -266,6 +301,51 @@ SDK 采用分层结构:
 └─────────────────────────────────────────────────────────┘
 ```
 
+## 会话管理与内存清除
+
+SDK 提供多种管理对话上下文和清除内存的方式：
+
+### 使用会话 ID（独立上下文）
+
+不同的会话 ID 维护完全独立的对话上下文：
+
+```rust
+let mut client = ClaudeClient::new(ClaudeAgentOptions::default());
+client.connect().await?;
+
+// 会话 1：数学对话
+client.query_with_session("2 + 2 等于多少?", "math-session").await?;
+
+// 会话 2：编程对话（不同上下文）
+client.query_with_session("什么是 Rust?", "programming-session").await?;
+
+// 回到会话 1 - Claude 记住数学上下文
+client.query_with_session("那 3 + 3 呢?", "math-session").await?;
+```
+
+### 分叉会话（全新开始）
+
+使用 `fork_session` 完全从头开始，没有任何历史记录：
+
+```rust
+let options = ClaudeAgentOptions::builder()
+    .fork_session(true)  // 每个恢复的会话都从头开始
+    .build();
+
+let mut client = ClaudeClient::new(options);
+client.connect().await?;
+```
+
+### 便捷方法
+
+使用 `new_session()` 快速切换会话：
+
+```rust
+client.new_session("session-2", "告诉我关于 Rust 的信息").await?;
+```
+
+完整示例请参阅 [examples/16_session_management.rs](examples/16_session_management.rs)。
+
 ## 类型系统
 
 SDK 为所有 Claude 交互提供强类型的 Rust 接口:
@@ -276,9 +356,9 @@ SDK 为所有 Claude 交互提供强类型的 Rust 接口:
 - **权限**: `PermissionResult`, `PermissionUpdate`, `CanUseToolCallback`
 - **MCP**: `McpServers`, `SdkMcpServer`, `ToolHandler`, `ToolResult`
 
-## 📚 示例
+## 示例
 
-SDK 包含 22 个全面的示例，演示所有功能。详见 [examples/README.md](examples/README.md)。
+SDK 包含 **24 个全面的示例**，演示所有功能，与 Python SDK 100% 对等。详见 [examples/README.md](examples/README.md)。
 
 ### 快速示例
 
@@ -291,6 +371,7 @@ cargo run --example 03_monitor_tools      # 监控工具执行
 # 流式传输和对话
 cargo run --example 06_bidirectional_client  # 多轮对话
 cargo run --example 14_streaming_mode -- all # 全面的流式传输模式
+cargo run --example 20_query_stream          # 流式查询 API
 
 # 钩子和控制
 cargo run --example 05_hooks_pretooluse      # PreToolUse 钩子
@@ -304,19 +385,41 @@ cargo run --example 08_mcp_server_integration  # 进程内 MCP 服务器
 cargo run --example 09_agents               # 自定义代理
 cargo run --example 11_setting_sources -- all  # 设置控制
 cargo run --example 13_system_prompt        # 系统提示配置
+
+# 生产特性
+cargo run --example 17_fallback_model       # 后备模型以提高可靠性
+cargo run --example 18_max_budget_usd       # 预算控制
+cargo run --example 19_max_thinking_tokens  # 扩展思考限制
+
+# 插件系统
+cargo run --example 21_custom_plugins       # 加载自定义插件
+cargo run --example 22_plugin_integration   # 实际插件使用
+
+# 多模态
+cargo run --example 23_image_input          # 图片和文本查询
+
+# 效率
+cargo run --example 24_efficiency_hooks     # 内置效率钩子
+
+# 会话管理
+cargo run --example 16_session_management   # 会话清除和管理
 ```
 
 ### 示例分类
 
-| 类别     | 示例  | 描述                           |
-| -------- | ----- | ------------------------------ |
-| **基础** | 01-03 | 简单查询、工具控制、监控       |
-| **高级** | 04-07 | 权限、钩子、流式传输、动态控制 |
-| **MCP**  | 08    | 自定义工具和 MCP 服务器集成    |
-| **配置** | 09-13 | 代理、设置、提示、调试         |
-| **模式** | 14-15 | 全面的流式传输和钩子模式       |
+| 类别     | 示例  | 描述                                 |
+| -------- | ----- | ------------------------------------ |
+| **基础** | 01-03 | 简单查询、工具控制、监控             |
+| **高级** | 04-07 | 权限、钩子、流式传输、动态控制       |
+| **MCP**  | 08    | 自定义工具和 MCP 服务器集成          |
+| **配置** | 09-13 | 代理、设置、提示、调试               |
+| **模式** | 14-16 | 全面的流式传输、钩子和会话模式       |
+| **生产** | 17-20 | 后备模型、预算、思考限制、流式传输   |
+| **插件** | 21-22 | 自定义插件加载和集成                 |
+| **多模态** | 23  | 图片和文本输入                       |
+| **效率** | 24    | 内置效率钩子和指标                   |
 
-## 📖 API 概览
+## API 概览
 
 ### 核心类型
 
@@ -326,16 +429,24 @@ ClaudeClient
 
 // 用于一次性交互的简单查询函数
 query(prompt: &str, options: Option<ClaudeAgentOptions>) -> Vec<Message>
+query_stream(prompt: &str, options: Option<ClaudeAgentOptions>) -> Stream<Item = Result<Message>>
+query_with_content(content: Vec<UserContentBlock>, options: Option<ClaudeAgentOptions>) -> Vec<Message>
+query_stream_with_content(content: Vec<UserContentBlock>, options: Option<ClaudeAgentOptions>) -> Stream<Item = Result<Message>>
 
 // 配置
 ClaudeAgentOptions {
     model: Option<String>,
+    fallback_model: Option<String>,      // 后备模型以提高可靠性
+    max_budget_usd: Option<f64>,         // 成本控制
+    max_thinking_tokens: Option<u32>,    // 扩展思考限制
+    plugins: Vec<SdkPluginConfig>,       // 自定义插件加载
     max_turns: Option<u32>,
     tools: Option<Tools>,                // 限制可用工具 (--tools)
     allowed_tools: Vec<String>,          // 授权 MCP 工具权限 (--allowedTools)
     system_prompt: Option<SystemPromptConfig>,
     hooks: Option<HashMap<String, Vec<HookMatcher>>>,
     mcp_servers: Option<HashMap<String, McpServer>>,
+    efficiency: Option<EfficiencyConfig>, // 内置效率钩子
     // ... 更多
 }
 
@@ -357,14 +468,20 @@ client.connect().await?;
 client.query("你好").await?;
 
 // 接收消息
-loop {
-    match client.receive_message().await? {
-        Some(Message::Assistant(msg)) => { /* 处理 */ }
-        Some(Message::Result(_)) => break,
-        None => break,
+let mut stream = client.receive_response();
+while let Some(message) = stream.next().await {
+    match message? {
+        Message::Assistant(msg) => { /* 处理 */ }
+        Message::Result(_) => break,
         _ => continue,
     }
 }
+drop(stream);
+
+// 会话管理 - 独立对话上下文
+client.query_with_session("第一个问题", "session-1").await?;
+client.query_with_session("不同上下文", "session-2").await?;
+client.new_session("session-3", "全新开始").await?;
 
 // 动态控制（执行中）
 client.interrupt().await?;  // 停止当前操作
@@ -409,13 +526,14 @@ hooks.insert("PreToolUse".to_string(), vec![
     }
 ]);
 
-let options = ClaudeAgentOptions {
-    hooks: Some(hooks),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .hooks(Some(hooks))
+    .build();
 ```
 
-## 🧪 开发
+完整 API 文档请参阅 [API.md](API.md)。
+
+## 开发
 
 ### 运行测试
 
@@ -459,7 +577,7 @@ cargo build --examples
 cargo doc --open
 ```
 
-## 🔧 故障排除
+## 故障排除
 
 ### 常见问题
 
@@ -483,15 +601,12 @@ cargo doc --open
 启用调试输出以查看正在发生的事情:
 
 ```rust
-let options = ClaudeAgentOptions {
-    stderr_callback: Some(Arc::new(|msg| eprintln!("DEBUG: {}", msg))),
-    extra_args: Some({
-        let mut args = HashMap::new();
-        args.insert("debug-to-stderr".to_string(), None);
-        args
-    }),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .stderr_callback(Some(Arc::new(|msg| eprintln!("DEBUG: {}", msg))))
+    .extra_args(HashMap::from([
+        ("debug-to-stderr".to_string(), None),
+    ]))
+    .build();
 ```
 
 ## Python SDK 对比
@@ -506,7 +621,7 @@ Rust SDK 紧密镜像 Python SDK API:
 | `await client.interrupt()`                    | `client.interrupt().await?`                 |
 | `await client.disconnect()`                   | `client.disconnect().await?`                |
 
-## 🤝 贡献
+## 贡献
 
 欢迎贡献！请随时提交 Pull Request。
 
@@ -542,16 +657,16 @@ cargo run --example 01_hello_world
 
 详见 [LICENSE.md](LICENSE.md)。
 
-## 🔗 相关项目
+## 相关项目
 
 - [Claude Code CLI](https://docs.claude.com/claude-code) - 官方 Claude Code 命令行界面
 - [Claude Agent SDK for Python](https://github.com/anthropics/claude-agent-sdk-python) - 官方 Python SDK
 - [Anthropic API](https://www.anthropic.com/api) - Claude API 文档
 
-## ⭐ 支持
+## 支持
 
 如果你觉得这个项目有用，请考虑在 GitHub 上给它一个星标！
 
-## 📝 更新日志
+## 更新日志
 
 版本历史和更改请参阅 [CHANGELOG.md](CHANGELOG.md)。

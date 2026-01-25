@@ -16,7 +16,7 @@ include = ["src/**/*.rs", "Cargo.toml", "LICENSE", "README.md"]
 
 [dependencies]
 # Async runtime
-tokio = { version = "1.48", features = [
+tokio = { version = "1.49", features = [
   "macros",
   "rt-multi-thread",
   "process",
@@ -52,7 +52,7 @@ path-absolutize = "3.1"
 tracing = "0.1"
 
 # UUID generation
-uuid = { version = "1.19", features = ["v4"] }
+uuid = { version = "1.20", features = ["v4"] }
 typed-builder = "0.23.2"
 
 # Macro utilities

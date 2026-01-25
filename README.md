@@ -8,33 +8,34 @@
 
 Rust SDK for interacting with Claude Code CLI, enabling programmatic access to Claude's capabilities with **full bidirectional streaming support**.
 
-**Status**: ✅ 100% feature parity with Python SDK - Production Ready
+**Status**: Production Ready - 100% feature parity with Python SDK
 
-## ✨ Features
+## Features
 
-- 🚀 **Simple Query API**: One-shot queries for stateless interactions with both collecting and streaming modes
-- 🔄 **Bidirectional Streaming**: Real-time streaming communication with `ClaudeClient`
-- 🎛️ **Dynamic Control**: Interrupt, change permissions, switch models mid-execution
-- 🪝 **Hooks System**: Intercept and control Claude's behavior with ergonomic builder API
-- 🛠️ **Custom Tools**: In-process MCP servers with ergonomic `tool!` macro
-- 🔌 **Plugin System**: Load custom plugins to extend Claude's capabilities
-- 🔐 **Permission Management**: Fine-grained control over tool execution
-- 💰 **Cost Control**: Budget limits and fallback models for production reliability
-- 🧠 **Extended Thinking**: Configure maximum thinking tokens for complex reasoning
-- 📊 **Session Management**: Separate contexts and memory clearing with fork_session
-- 🦀 **Type Safety**: Strongly-typed messages, configs, hooks, and permissions
-- ⚡ **Zero Deadlock**: Lock-free architecture for concurrent read/write
-- 📚 **Comprehensive Examples**: 23 complete examples covering all features
-- 🖼️ **Multimodal Input**: Send images alongside text with base64 or URL sources
-- 🧪 **Well Tested**: Extensive test coverage with unit and integration tests
+- **Simple Query API**: One-shot queries for stateless interactions with both collecting and streaming modes
+- **Bidirectional Streaming**: Real-time streaming communication with `ClaudeClient`
+- **Dynamic Control**: Interrupt, change permissions, switch models mid-execution
+- **Hooks System**: 6 hook types (PreToolUse, PostToolUse, UserPromptSubmit, Stop, SubagentStop, PreCompact)
+- **Custom Tools**: In-process MCP servers with ergonomic `tool!` macro
+- **Plugin System**: Load custom plugins to extend Claude's capabilities
+- **Permission Management**: Fine-grained control over tool execution with callbacks
+- **Cost Control**: Budget limits and fallback models for production reliability
+- **Extended Thinking**: Configure maximum thinking tokens for complex reasoning
+- **Session Management**: Separate contexts and memory clearing with fork_session
+- **Efficiency Hooks**: Built-in execution optimization with metrics tracking
+- **Type Safety**: Strongly-typed messages, configs, hooks, and permissions
+- **Zero Deadlock**: Lock-free architecture for concurrent read/write
+- **Multimodal Input**: Send images alongside text with base64 or URL sources
+- **Well Tested**: Extensive test coverage with unit and integration tests
+- **24 Examples**: Comprehensive examples covering all features
 
-## 📦 Installation
+## Installation
 
 Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-claude-agent-sdk-rs = "0.5"
+claude-agent-sdk-rs = "0.6"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -45,13 +46,13 @@ cargo add claude-agent-sdk-rs
 cargo add tokio --features full
 ```
 
-## 🎯 Prerequisites
+## Prerequisites
 
 - **Rust**: 1.90 or higher
 - **Claude Code CLI**: Version 2.0.0 or higher ([Installation Guide](https://docs.claude.com/claude-code))
 - **API Key**: Anthropic API key set in environment or Claude Code config
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Simple Query (One-shot)
 
@@ -80,14 +81,14 @@ async fn main() -> anyhow::Result<()> {
 With custom options:
 
 ```rust
-use claude_agent_sdk_rs::{ClaudeAgentOptions, query};
+use claude_agent_sdk_rs::{ClaudeAgentOptions, query, PermissionMode};
 
-let options = ClaudeAgentOptions {
-    model: Some("sonnet".to_string()),  // Use Sonnet for lower cost
-    max_turns: Some(5),
-    tools: Some(["Read", "Write"].into()),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .model("sonnet")
+    .max_turns(5)
+    .tools(["Read", "Write", "Bash"])
+    .permission_mode(PermissionMode::AcceptEdits)
+    .build();
 
 let messages = query("Create a hello.txt file", Some(options)).await?;
 ```
@@ -105,20 +106,18 @@ The SDK provides two different parameters for tool configuration:
 
 ```rust
 // Claude can ONLY use Read, Write, and Bash
-let options = ClaudeAgentOptions {
-    tools: Some(["Read", "Write", "Bash"].into()),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .tools(["Read", "Write", "Bash"])
+    .build();
 ```
 
 **Use `allowed_tools`** when you need to grant permission for custom MCP tools:
 
 ```rust
 // Allow custom MCP tools (format: mcp__{server}__{tool})
-let options = ClaudeAgentOptions {
-    allowed_tools: vec!["mcp__my-tools__greet".to_string()],
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .allowed_tools(vec!["mcp__my-tools__greet".to_string()])
+    .build();
 ```
 
 ### Streaming Query (Memory-Efficient)
@@ -127,7 +126,7 @@ For large conversations or real-time processing, use `query_stream()`:
 
 ```rust
 use claude_agent_sdk_rs::{query_stream, Message, ContentBlock};
-use futures::stream::StreamExt;
+use futures::StreamExt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -158,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
 
 ```rust
 use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions, Message, ContentBlock};
+use futures::StreamExt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -170,38 +170,40 @@ async fn main() -> anyhow::Result<()> {
     client.query("What is the capital of France?").await?;
 
     // Receive response
-    loop {
-        match client.receive_message().await? {
-            Some(Message::Assistant(msg)) => {
+    let mut stream = client.receive_response();
+    while let Some(message) = stream.next().await {
+        match message? {
+            Message::Assistant(msg) => {
                 for block in msg.message.content {
                     if let ContentBlock::Text(text) = block {
                         println!("Claude: {}", text.text);
                     }
                 }
             }
-            Some(Message::Result(_)) => break,
-            Some(_) => continue,
-            None => break,
+            Message::Result(_) => break,
+            _ => continue,
         }
     }
+    drop(stream);
 
     // Follow-up question - Claude remembers context!
     client.query("What's the population of that city?").await?;
 
-    loop {
-        match client.receive_message().await? {
-            Some(Message::Assistant(msg)) => {
+    let mut stream = client.receive_response();
+    while let Some(message) = stream.next().await {
+        match message? {
+            Message::Assistant(msg) => {
                 for block in msg.message.content {
                     if let ContentBlock::Text(text) = block {
                         println!("Claude: {}", text.text);
                     }
                 }
             }
-            Some(Message::Result(_)) => break,
-            Some(_) => continue,
-            None => break,
+            Message::Result(_) => break,
+            _ => continue,
         }
     }
+    drop(stream);
 
     client.disconnect().await?;
     Ok(())
@@ -250,13 +252,12 @@ async fn main() -> anyhow::Result<()> {
     // Note: Use `allowed_tools` for MCP tools (not `tools`)
     // - allowed_tools: Grants permission for custom MCP tools
     // - tools: Restricts built-in tools (Read, Write, Bash, etc.)
-    let options = ClaudeAgentOptions {
-        mcp_servers: McpServers::Dict(mcp_servers),
-        allowed_tools: vec!["mcp__my-tools__greet".to_string()],
-        model: Some("sonnet".to_string()),  // Use Sonnet for lower cost
-        permission_mode: Some(PermissionMode::AcceptEdits),
-        ..Default::default()
-    };
+    let options = ClaudeAgentOptions::builder()
+        .mcp_servers(McpServers::Dict(mcp_servers))
+        .allowed_tools(vec!["mcp__my-tools__greet".to_string()])
+        .model("sonnet")
+        .permission_mode(PermissionMode::AcceptEdits)
+        .build();
 
     let mut client = ClaudeClient::new(options);
     client.connect().await?;
@@ -355,9 +356,9 @@ The SDK provides strongly-typed Rust interfaces for all Claude interactions:
 - **Permissions**: `PermissionResult`, `PermissionUpdate`, `CanUseToolCallback`
 - **MCP**: `McpServers`, `SdkMcpServer`, `ToolHandler`, `ToolResult`
 
-## 📚 Examples
+## Examples
 
-The SDK includes **23 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
+The SDK includes **24 comprehensive examples** demonstrating all features with 100% parity to Python SDK. See [examples/README.md](examples/README.md) for details.
 
 ### Quick Examples
 
@@ -370,6 +371,7 @@ cargo run --example 03_monitor_tools      # Monitor tool execution
 # Streaming & Conversations
 cargo run --example 06_bidirectional_client  # Multi-turn conversations
 cargo run --example 14_streaming_mode -- all # Comprehensive streaming patterns
+cargo run --example 20_query_stream          # Streaming query API
 
 # Hooks & Control
 cargo run --example 05_hooks_pretooluse      # PreToolUse hooks
@@ -388,7 +390,6 @@ cargo run --example 13_system_prompt        # System prompt configs
 cargo run --example 17_fallback_model       # Fallback model for reliability
 cargo run --example 18_max_budget_usd       # Budget control
 cargo run --example 19_max_thinking_tokens  # Extended thinking limits
-cargo run --example 20_query_stream         # Streaming query API
 
 # Plugin System
 cargo run --example 21_custom_plugins       # Load custom plugins
@@ -396,6 +397,9 @@ cargo run --example 22_plugin_integration   # Real-world plugin usage
 
 # Multimodal
 cargo run --example 23_image_input          # Image input with text queries
+
+# Efficiency
+cargo run --example 24_efficiency_hooks     # Built-in efficiency hooks
 
 # Session Management
 cargo run --example 16_session_management   # Session clearing and management
@@ -413,8 +417,9 @@ cargo run --example 16_session_management   # Session clearing and management
 | **Production**  | 17-20    | Fallback models, budgets, thinking limits, streaming|
 | **Plugins**     | 21-22    | Custom plugin loading and integration               |
 | **Multimodal**  | 23       | Image input alongside text                          |
+| **Efficiency**  | 24       | Built-in efficiency hooks and metrics               |
 
-## 📖 API Overview
+## API Overview
 
 ### Core Types
 
@@ -441,6 +446,7 @@ ClaudeAgentOptions {
     system_prompt: Option<SystemPromptConfig>,
     hooks: Option<HashMap<String, Vec<HookMatcher>>>,
     mcp_servers: Option<HashMap<String, McpServer>>,
+    efficiency: Option<EfficiencyConfig>, // Built-in efficiency hooks
     // ... and more
 }
 
@@ -462,14 +468,15 @@ client.connect().await?;
 client.query("Hello").await?;
 
 // Receive messages
-loop {
-    match client.receive_message().await? {
-        Some(Message::Assistant(msg)) => { /* Handle */ }
-        Some(Message::Result(_)) => break,
-        None => break,
+let mut stream = client.receive_response();
+while let Some(message) = stream.next().await {
+    match message? {
+        Message::Assistant(msg) => { /* Handle */ }
+        Message::Result(_) => break,
         _ => continue,
     }
 }
+drop(stream);
 
 // Session management - separate conversation contexts
 client.query_with_session("First question", "session-1").await?;
@@ -519,13 +526,14 @@ hooks.insert("PreToolUse".to_string(), vec![
     }
 ]);
 
-let options = ClaudeAgentOptions {
-    hooks: Some(hooks),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .hooks(Some(hooks))
+    .build();
 ```
 
-## 🧪 Development
+For complete API documentation, see [API.md](API.md).
+
+## Development
 
 ### Running Tests
 
@@ -569,7 +577,7 @@ cargo build --examples
 cargo doc --open
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -593,15 +601,12 @@ cargo doc --open
 Enable debug output to see what's happening:
 
 ```rust
-let options = ClaudeAgentOptions {
-    stderr_callback: Some(Arc::new(|msg| eprintln!("DEBUG: {}", msg))),
-    extra_args: Some({
-        let mut args = HashMap::new();
-        args.insert("debug-to-stderr".to_string(), None);
-        args
-    }),
-    ..Default::default()
-};
+let options = ClaudeAgentOptions::builder()
+    .stderr_callback(Some(Arc::new(|msg| eprintln!("DEBUG: {}", msg))))
+    .extra_args(HashMap::from([
+        ("debug-to-stderr".to_string(), None),
+    ]))
+    .build();
 ```
 
 ## Python SDK Comparison
@@ -616,7 +621,7 @@ The Rust SDK closely mirrors the Python SDK API:
 | `await client.interrupt()`                    | `client.interrupt().await?`                 |
 | `await client.disconnect()`                   | `client.disconnect().await?`                |
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -652,16 +657,16 @@ This project is distributed under the terms of MIT.
 
 See [LICENSE.md](LICENSE.md) for details.
 
-## 🔗 Related Projects
+## Related Projects
 
 - [Claude Code CLI](https://docs.claude.com/claude-code) - Official Claude Code command-line interface
 - [Claude Agent SDK for Python](https://github.com/anthropics/claude-agent-sdk-python) - Official Python SDK
 - [Anthropic API](https://www.anthropic.com/api) - Claude API documentation
 
-## ⭐ Show Your Support
+## Show Your Support
 
 If you find this project useful, please consider giving it a star on GitHub!
 
-## 📝 Changelog
+## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and changes.
