@@ -143,13 +143,17 @@ impl MockTransport {
         let _ = self.injector_tx.send(msg);
     }
 
-    /// Get all written messages
+    /// Get all written messages (blocking)
+    ///
+    /// Note: Prefer `written_messages_async()` in async contexts to avoid potential
+    /// issues with mixed runtime executors.
     pub fn written_messages(&self) -> Vec<WrittenMessage> {
-        // Use try_lock for synchronous access, block if needed
+        // Use futures executor for synchronous access
+        // Safe in test contexts but may have issues if called from within tokio runtime
         futures::executor::block_on(async { self.written.lock().await.clone() })
     }
 
-    /// Get written messages async
+    /// Get written messages asynchronously (preferred)
     pub async fn written_messages_async(&self) -> Vec<WrittenMessage> {
         self.written.lock().await.clone()
     }
@@ -178,9 +182,24 @@ impl MockTransport {
     pub fn from_scenario(scenario: super::Scenario) -> Self {
         let mut all_messages = scenario.on_connect;
         for exchange in scenario.exchanges {
-            all_messages.extend(exchange.responses);
+            // If exchange has a trigger_pattern, convert responses to AfterWrite timing
+            if let Some(ref pattern) = exchange.trigger_pattern {
+                for mut msg in exchange.responses {
+                    msg.timing = MessageTiming::AfterWrite {
+                        pattern: pattern.clone(),
+                    };
+                    all_messages.push(msg);
+                }
+            } else {
+                all_messages.extend(exchange.responses);
+            }
         }
         Self::new(all_messages, TimingConfig::default())
+    }
+
+    /// Check if there are pending triggered messages
+    pub async fn has_triggered_messages(&self) -> bool {
+        !self.triggered_messages.lock().await.is_empty()
     }
 }
 
@@ -220,9 +239,15 @@ impl Transport for MockTransport {
         let injector_rx = self.injector_rx.clone();
         let timing = self.timing.clone();
         let rng = Arc::new(Mutex::new(StdRng::seed_from_u64(self.timing.seed)));
+        let connected = &self.connected;
 
         Box::pin(async_stream::stream! {
             loop {
+                // Check connection state
+                if !connected.load(Ordering::SeqCst) {
+                    break;
+                }
+
                 // Check for triggered messages first (from AfterWrite)
                 {
                     let mut triggered = triggered_messages.lock().await;
@@ -270,10 +295,24 @@ impl Transport for MockTransport {
                         yield Ok(scheduled.value);
                     }
                     None => {
-                        // No more pre-loaded messages, wait for injection
-                        match injector_rx.recv_async().await {
-                            Ok(msg) => yield Ok(msg),
-                            Err(_) => break, // Channel closed
+                        // No more pre-loaded messages, poll for injection or triggered messages
+                        // Use a short timeout to periodically check for triggered messages
+                        // This prevents deadlock when AfterWrite messages are triggered by writes
+                        tokio::select! {
+                            result = injector_rx.recv_async() => {
+                                match result {
+                                    Ok(msg) => yield Ok(msg),
+                                    Err(_) => break, // Channel closed
+                                }
+                            }
+                            _ = tokio::time::sleep(Duration::from_millis(10)) => {
+                                // Check if we're still connected and if triggered messages appeared
+                                if !connected.load(Ordering::SeqCst) {
+                                    break;
+                                }
+                                // Loop back to check triggered_messages
+                                continue;
+                            }
                         }
                     }
                 }

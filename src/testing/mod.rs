@@ -77,3 +77,6 @@ pub use recorders::{HookInvocation, HookRecorder, PermissionDecision, Permission
 // Convenience re-exports
 pub use crate::types::hooks::HookEvent;
 pub use crate::types::messages::*;
+
+// Re-export Transport trait for testing
+pub use crate::internal::transport::Transport;
