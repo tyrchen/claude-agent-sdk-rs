@@ -56,6 +56,9 @@ pub struct ClaudeClient {
     /// Shutdown receiver - signals when background task completes
     shutdown_rx: Option<tokio::sync::oneshot::Receiver<()>>,
     connected: bool,
+    /// Custom transport for testing (feature-gated)
+    #[cfg(feature = "testing")]
+    _custom_transport: Option<Arc<dyn Transport>>,
 }
 
 impl ClaudeClient {
@@ -78,6 +81,8 @@ impl ClaudeClient {
             query: None,
             shutdown_rx: None,
             connected: false,
+            #[cfg(feature = "testing")]
+            _custom_transport: None,
         }
     }
 
@@ -115,7 +120,127 @@ impl ClaudeClient {
             query: None,
             shutdown_rx: None,
             connected: false,
+            #[cfg(feature = "testing")]
+            _custom_transport: None,
         })
+    }
+
+    /// Create a client with a custom transport (for testing)
+    ///
+    /// This method allows injecting a mock transport for testing purposes,
+    /// enabling deterministic tests without requiring the Claude Code CLI.
+    ///
+    /// # Arguments
+    ///
+    /// * `transport` - The transport implementation to use
+    /// * `options` - Configuration options for the Claude client
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[cfg(feature = "testing")]
+    /// # {
+    /// use claude_agent_sdk_rs::{ClaudeClient, ClaudeAgentOptions};
+    /// use claude_agent_sdk_rs::testing::MockTransport;
+    /// use std::sync::Arc;
+    ///
+    /// let transport = Arc::new(MockTransport::builder().build());
+    /// let client = ClaudeClient::with_transport(transport, ClaudeAgentOptions::default());
+    /// # }
+    /// ```
+    #[cfg(feature = "testing")]
+    pub fn with_transport(transport: Arc<dyn Transport>, options: ClaudeAgentOptions) -> Self {
+        Self {
+            options,
+            query: None,
+            shutdown_rx: None,
+            connected: false,
+            // Store the transport for use in connect_with_transport
+            _custom_transport: Some(transport),
+        }
+    }
+
+    /// Connect with a pre-configured transport (for testing)
+    #[cfg(feature = "testing")]
+    pub async fn connect_with_transport(&mut self) -> Result<()> {
+        if self.connected {
+            return Ok(());
+        }
+
+        let transport = self._custom_transport.take().ok_or_else(|| {
+            ClaudeError::InvalidConfig(
+                "No custom transport configured. Use with_transport() first.".to_string(),
+            )
+        })?;
+
+        // Connect the transport
+        transport.connect().await?;
+
+        // Create Query with the custom transport
+        let mut query = QueryFull::new_with_transport(transport);
+
+        // Extract SDK MCP servers from options
+        let sdk_mcp_servers =
+            if let crate::types::mcp::McpServers::Dict(servers_dict) = &self.options.mcp_servers {
+                servers_dict
+                    .iter()
+                    .filter_map(|(name, config)| {
+                        if let crate::types::mcp::McpServerConfig::Sdk(sdk_config) = config {
+                            Some((name.clone(), sdk_config.clone()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            } else {
+                std::collections::HashMap::new()
+            };
+        query.set_sdk_mcp_servers(sdk_mcp_servers);
+
+        // Build efficiency hooks if configured
+        let efficiency_hooks = self
+            .options
+            .efficiency
+            .as_ref()
+            .map(build_efficiency_hooks)
+            .unwrap_or_default();
+
+        // Merge user hooks with efficiency hooks
+        let merged_hooks = merge_hooks(self.options.hooks.clone(), efficiency_hooks);
+
+        // Convert hooks to internal format
+        let hooks: Option<
+            std::collections::HashMap<String, Vec<crate::types::hooks::HookMatcher>>,
+        > = merged_hooks.as_ref().map(|hooks_map| {
+            hooks_map
+                .iter()
+                .map(|(event, matchers)| {
+                    let event_name = match event {
+                        HookEvent::PreToolUse => "PreToolUse",
+                        HookEvent::PostToolUse => "PostToolUse",
+                        HookEvent::UserPromptSubmit => "UserPromptSubmit",
+                        HookEvent::Stop => "Stop",
+                        HookEvent::SubagentStop => "SubagentStop",
+                        HookEvent::PreCompact => "PreCompact",
+                    };
+                    (event_name.to_string(), matchers.clone())
+                })
+                .collect()
+        });
+
+        // Start reading messages in background
+        let shutdown_rx = query.start().await?;
+
+        // For mock transport, we skip initialization since there's no real CLI
+        // The mock will emit messages directly
+        // Optionally initialize hooks if provided
+        let _ = hooks;
+
+        self.query = Some(Arc::new(query));
+        self.shutdown_rx = Some(shutdown_rx);
+        self.connected = true;
+
+        Ok(())
     }
 
     /// Connect to Claude (analogous to Python's __aenter__)

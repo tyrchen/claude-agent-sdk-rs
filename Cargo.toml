@@ -64,3 +64,8 @@ mockall = "0.14"
 
 [features]
 default = []
+testing = ["rand"]
+
+[dependencies.rand]
+version = "0.8"
+optional = true

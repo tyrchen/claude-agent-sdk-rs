@@ -237,6 +237,8 @@ pub mod client;
 pub mod errors;
 mod internal;
 pub mod query;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod types;
 pub mod version;
 

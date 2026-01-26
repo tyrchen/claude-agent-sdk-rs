@@ -90,6 +90,24 @@ impl QueryFull {
         }
     }
 
+    /// Create a new Query with a pre-existing Arc transport (for testing)
+    #[cfg(feature = "testing")]
+    pub fn new_with_transport(transport: Arc<dyn Transport>) -> Self {
+        let (message_tx, message_rx) = flume::unbounded();
+
+        Self {
+            transport,
+            hook_callbacks: Arc::new(DashMap::new()),
+            sdk_mcp_servers: Arc::new(DashMap::new()),
+            next_callback_id: Arc::new(AtomicU64::new(0)),
+            request_counter: Arc::new(AtomicU64::new(0)),
+            pending_responses: Arc::new(DashMap::new()),
+            message_tx,
+            message_rx,
+            initialization_result: OnceLock::new(),
+        }
+    }
+
     /// Set SDK MCP servers
     pub fn set_sdk_mcp_servers(&mut self, servers: HashMap<String, McpSdkServerConfig>) {
         self.sdk_mcp_servers.clear();
