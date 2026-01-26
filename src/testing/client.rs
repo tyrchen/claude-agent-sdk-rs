@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use super::Transport;
 use super::scenario::Scenario;
 use super::transport::{MockTransport, WrittenMessage};
 use crate::client::ClaudeClient;
@@ -113,6 +114,58 @@ impl MockClient {
             "type": "error",
             "error": { "message": err }
         }));
+    }
+
+    // === Stream Access ===
+
+    /// Access the raw message stream for receiving messages
+    ///
+    /// This provides lower-level access to messages without going through
+    /// the client's response handling logic.
+    pub fn receive_messages(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn futures::stream::Stream<
+                    Item = crate::errors::Result<crate::types::messages::Message>,
+                > + Send
+                + '_,
+        >,
+    > {
+        use futures::StreamExt;
+
+        let stream = self.transport.read_messages();
+
+        Box::pin(
+            stream.map(|result| {
+                result.and_then(crate::internal::message_parser::MessageParser::parse)
+            }),
+        )
+    }
+
+    // === Convenience Assertions ===
+
+    /// Assert no messages were written
+    pub fn assert_no_writes(&self) {
+        let written = self.transport.written_messages();
+        assert!(
+            written.is_empty(),
+            "Expected no writes, but got {} messages: {:?}",
+            written.len(),
+            written.iter().map(|w| &w.data).collect::<Vec<_>>()
+        );
+    }
+
+    /// Assert exact number of writes
+    pub fn assert_write_count(&self, expected: usize) {
+        let written = self.transport.written_messages();
+        assert_eq!(
+            written.len(),
+            expected,
+            "Expected {} writes, got {}",
+            expected,
+            written.len()
+        );
     }
 }
 
