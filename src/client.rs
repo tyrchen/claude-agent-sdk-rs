@@ -1,6 +1,7 @@
 //! ClaudeClient for bidirectional streaming interactions with hook support
 
 use futures::stream::Stream;
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -11,7 +12,8 @@ use crate::internal::transport::subprocess::QueryPrompt;
 use crate::internal::transport::{SubprocessTransport, Transport};
 use crate::types::config::{ClaudeAgentOptions, PermissionMode};
 use crate::types::efficiency::{build_efficiency_hooks, merge_hooks};
-use crate::types::hooks::HookEvent;
+use crate::types::hooks::{HookEvent, HookMatcher};
+use crate::types::mcp::McpSdkServerConfig;
 use crate::types::messages::{Message, UserContentBlock};
 
 /// Client for bidirectional streaming interactions with Claude
@@ -84,6 +86,100 @@ impl ClaudeClient {
             #[cfg(feature = "testing")]
             _custom_transport: None,
         }
+    }
+
+    // =========================================================================
+    // Internal helper methods to reduce code duplication (DRY principle)
+    // =========================================================================
+
+    /// Extract SDK MCP servers from options
+    ///
+    /// This helper method extracts SDK MCP server configurations from the
+    /// options, filtering out non-SDK server types.
+    fn extract_sdk_mcp_servers(&self) -> HashMap<String, McpSdkServerConfig> {
+        if let crate::types::mcp::McpServers::Dict(servers_dict) = &self.options.mcp_servers {
+            servers_dict
+                .iter()
+                .filter_map(|(name, config)| {
+                    if let crate::types::mcp::McpServerConfig::Sdk(sdk_config) = config {
+                        Some((name.clone(), sdk_config.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        }
+    }
+
+    /// Build and merge hooks from options
+    ///
+    /// This combines user-provided hooks with efficiency hooks and converts
+    /// them to the internal format expected by the CLI.
+    fn build_hooks_config(&self) -> Option<HashMap<String, Vec<HookMatcher>>> {
+        // Build efficiency hooks if configured
+        let efficiency_hooks = self
+            .options
+            .efficiency
+            .as_ref()
+            .map(build_efficiency_hooks)
+            .unwrap_or_default();
+
+        // Merge user hooks with efficiency hooks
+        let merged_hooks = merge_hooks(self.options.hooks.clone(), efficiency_hooks);
+
+        // Convert hooks to internal format
+        merged_hooks.as_ref().map(|hooks_map| {
+            hooks_map
+                .iter()
+                .map(|(event, matchers)| {
+                    let event_name = Self::hook_event_to_string(event);
+                    (event_name, matchers.clone())
+                })
+                .collect()
+        })
+    }
+
+    /// Convert HookEvent enum to string representation
+    #[inline]
+    fn hook_event_to_string(event: &HookEvent) -> String {
+        match event {
+            HookEvent::PreToolUse => "PreToolUse",
+            HookEvent::PostToolUse => "PostToolUse",
+            HookEvent::UserPromptSubmit => "UserPromptSubmit",
+            HookEvent::Stop => "Stop",
+            HookEvent::SubagentStop => "SubagentStop",
+            HookEvent::PreCompact => "PreCompact",
+        }
+        .to_string()
+    }
+
+    /// Common setup for QueryFull after transport is connected
+    ///
+    /// This handles the common initialization logic shared between
+    /// `connect()` and `connect_with_transport()`.
+    async fn setup_query(&mut self, mut query: QueryFull, initialize: bool) -> Result<()> {
+        // Extract SDK MCP servers from options
+        let sdk_mcp_servers = self.extract_sdk_mcp_servers();
+        query.set_sdk_mcp_servers(sdk_mcp_servers);
+
+        // Build hooks configuration
+        let hooks = self.build_hooks_config();
+
+        // Start reading messages in background
+        let shutdown_rx = query.start().await?;
+
+        // Initialize with hooks if requested
+        if initialize {
+            query.initialize(hooks).await?;
+        }
+
+        self.query = Some(Arc::new(query));
+        self.shutdown_rx = Some(shutdown_rx);
+        self.connected = true;
+
+        Ok(())
     }
 
     /// Create a new ClaudeClient with early validation
@@ -161,6 +257,9 @@ impl ClaudeClient {
     }
 
     /// Connect with a pre-configured transport (for testing)
+    ///
+    /// This method uses the mock transport for testing purposes, skipping
+    /// the initialization step since there's no real CLI to communicate with.
     #[cfg(feature = "testing")]
     pub async fn connect_with_transport(&mut self) -> Result<()> {
         if self.connected {
@@ -177,70 +276,11 @@ impl ClaudeClient {
         transport.connect().await?;
 
         // Create Query with the custom transport
-        let mut query = QueryFull::new_with_transport(transport);
+        let query = QueryFull::new_with_transport(transport);
 
-        // Extract SDK MCP servers from options
-        let sdk_mcp_servers =
-            if let crate::types::mcp::McpServers::Dict(servers_dict) = &self.options.mcp_servers {
-                servers_dict
-                    .iter()
-                    .filter_map(|(name, config)| {
-                        if let crate::types::mcp::McpServerConfig::Sdk(sdk_config) = config {
-                            Some((name.clone(), sdk_config.clone()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            } else {
-                std::collections::HashMap::new()
-            };
-        query.set_sdk_mcp_servers(sdk_mcp_servers);
-
-        // Build efficiency hooks if configured
-        let efficiency_hooks = self
-            .options
-            .efficiency
-            .as_ref()
-            .map(build_efficiency_hooks)
-            .unwrap_or_default();
-
-        // Merge user hooks with efficiency hooks
-        let merged_hooks = merge_hooks(self.options.hooks.clone(), efficiency_hooks);
-
-        // Convert hooks to internal format
-        let hooks: Option<
-            std::collections::HashMap<String, Vec<crate::types::hooks::HookMatcher>>,
-        > = merged_hooks.as_ref().map(|hooks_map| {
-            hooks_map
-                .iter()
-                .map(|(event, matchers)| {
-                    let event_name = match event {
-                        HookEvent::PreToolUse => "PreToolUse",
-                        HookEvent::PostToolUse => "PostToolUse",
-                        HookEvent::UserPromptSubmit => "UserPromptSubmit",
-                        HookEvent::Stop => "Stop",
-                        HookEvent::SubagentStop => "SubagentStop",
-                        HookEvent::PreCompact => "PreCompact",
-                    };
-                    (event_name.to_string(), matchers.clone())
-                })
-                .collect()
-        });
-
-        // Start reading messages in background
-        let shutdown_rx = query.start().await?;
-
-        // For mock transport, we skip initialization since there's no real CLI
-        // The mock will emit messages directly
-        // Optionally initialize hooks if provided
-        let _ = hooks;
-
-        self.query = Some(Arc::new(query));
-        self.shutdown_rx = Some(shutdown_rx);
-        self.connected = true;
-
-        Ok(())
+        // Use common setup, but skip initialization for mock transport
+        // (mock transport doesn't have a real CLI to initialize)
+        self.setup_query(query, false).await
     }
 
     /// Connect to Claude (analogous to Python's __aenter__)
@@ -267,68 +307,10 @@ impl ClaudeClient {
         transport.connect().await?;
 
         // Create Query with hooks
-        let mut query = QueryFull::new(Box::new(transport));
+        let query = QueryFull::new(Box::new(transport));
 
-        // Extract SDK MCP servers from options
-        let sdk_mcp_servers =
-            if let crate::types::mcp::McpServers::Dict(servers_dict) = &self.options.mcp_servers {
-                servers_dict
-                    .iter()
-                    .filter_map(|(name, config)| {
-                        if let crate::types::mcp::McpServerConfig::Sdk(sdk_config) = config {
-                            Some((name.clone(), sdk_config.clone()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            } else {
-                std::collections::HashMap::new()
-            };
-        query.set_sdk_mcp_servers(sdk_mcp_servers);
-
-        // Build efficiency hooks if configured
-        let efficiency_hooks = self
-            .options
-            .efficiency
-            .as_ref()
-            .map(build_efficiency_hooks)
-            .unwrap_or_default();
-
-        // Merge user hooks with efficiency hooks
-        let merged_hooks = merge_hooks(self.options.hooks.clone(), efficiency_hooks);
-
-        // Convert hooks to internal format
-        let hooks = merged_hooks.as_ref().map(|hooks_map| {
-            hooks_map
-                .iter()
-                .map(|(event, matchers)| {
-                    let event_name = match event {
-                        HookEvent::PreToolUse => "PreToolUse",
-                        HookEvent::PostToolUse => "PostToolUse",
-                        HookEvent::UserPromptSubmit => "UserPromptSubmit",
-                        HookEvent::Stop => "Stop",
-                        HookEvent::SubagentStop => "SubagentStop",
-                        HookEvent::PreCompact => "PreCompact",
-                    };
-                    (event_name.to_string(), matchers.clone())
-                })
-                .collect()
-        });
-
-        // Start reading messages in background FIRST
-        // This must happen before initialize() because initialize()
-        // sends a control request and waits for response
-        let shutdown_rx = query.start().await?;
-
-        // Initialize with hooks (sends control request)
-        query.initialize(hooks).await?;
-
-        self.query = Some(Arc::new(query));
-        self.shutdown_rx = Some(shutdown_rx);
-        self.connected = true;
-
-        Ok(())
+        // Use common setup with initialization enabled
+        self.setup_query(query, true).await
     }
 
     /// Send a query to Claude
