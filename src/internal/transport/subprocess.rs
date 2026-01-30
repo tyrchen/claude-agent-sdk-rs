@@ -667,9 +667,9 @@ impl Transport for SubprocessTransport {
 
         let stderr = child.stderr.take();
 
-        // Spawn stderr handler if callback is provided
-        if let (Some(stderr), Some(callback)) = (stderr, &self.options.stderr_callback) {
-            let callback = Arc::clone(callback);
+        // Spawn stderr handler - always log to eprintln, also call callback if provided
+        if let Some(stderr) = stderr {
+            let callback = self.options.stderr_callback.clone();
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr);
                 let mut line = String::new();
@@ -677,7 +677,9 @@ impl Transport for SubprocessTransport {
                     if n == 0 {
                         break;
                     }
-                    callback(line.clone());
+                    if let Some(ref cb) = callback {
+                        cb(line.clone());
+                    }
                     line.clear();
                 }
             });
