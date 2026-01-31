@@ -12,8 +12,32 @@ use tokio::sync::oneshot;
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
 use crate::types::mcp::McpSdkServerConfig;
+use crate::types::permissions::{
+    CanUseToolCallback, PermissionResult, PermissionResultDeny, PermissionUpdate,
+    ToolPermissionContext,
+};
 
 use super::transport::Transport;
+
+fn empty_object() -> serde_json::Value {
+    serde_json::Value::Object(serde_json::Map::new())
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CanUseToolControlRequest {
+    #[serde(default, alias = "toolName")]
+    tool_name: Option<String>,
+    #[serde(default = "empty_object", alias = "input", alias = "toolInput")]
+    tool_input: serde_json::Value,
+    #[serde(
+        default,
+        alias = "permission_suggestions",
+        alias = "permissionSuggestions"
+    )]
+    suggestions: Option<Vec<PermissionUpdate>>,
+    #[serde(default, alias = "toolUseId")]
+    tool_use_id: Option<String>,
+}
 
 /// Control request from SDK to CLI
 #[allow(dead_code)]
@@ -61,6 +85,8 @@ pub struct QueryFull {
     hook_callbacks: Arc<DashMap<String, HookCallback>>,
     /// SDK MCP servers - concurrent access via DashMap
     sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
+    /// Permission callback for tool usage
+    can_use_tool: Option<CanUseToolCallback>,
     next_callback_id: Arc<AtomicU64>,
     request_counter: Arc<AtomicU64>,
     /// Pending control request responses - concurrent access via DashMap
@@ -81,6 +107,7 @@ impl QueryFull {
             transport: Arc::from(transport),
             hook_callbacks: Arc::new(DashMap::new()),
             sdk_mcp_servers: Arc::new(DashMap::new()),
+            can_use_tool: None,
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(DashMap::new()),
@@ -99,6 +126,7 @@ impl QueryFull {
             transport,
             hook_callbacks: Arc::new(DashMap::new()),
             sdk_mcp_servers: Arc::new(DashMap::new()),
+            can_use_tool: None,
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(DashMap::new()),
@@ -114,6 +142,11 @@ impl QueryFull {
         for (name, config) in servers {
             self.sdk_mcp_servers.insert(name, config);
         }
+    }
+
+    /// Set can_use_tool callback for permission handling
+    pub fn set_can_use_tool(&mut self, callback: Option<CanUseToolCallback>) {
+        self.can_use_tool = callback;
     }
 
     /// Initialize with hooks
@@ -180,6 +213,7 @@ impl QueryFull {
         let transport_for_hooks = Arc::clone(&self.transport);
         let hook_callbacks = Arc::clone(&self.hook_callbacks);
         let sdk_mcp_servers = Arc::clone(&self.sdk_mcp_servers);
+        let can_use_tool = self.can_use_tool.clone();
         let pending_responses = Arc::clone(&self.pending_responses);
         let message_tx = self.message_tx.clone();
 
@@ -223,6 +257,7 @@ impl QueryFull {
                                     let transport_clone = Arc::clone(&transport_for_hooks);
                                     let hook_callbacks_clone = Arc::clone(&hook_callbacks);
                                     let sdk_mcp_servers_clone = Arc::clone(&sdk_mcp_servers);
+                                    let can_use_tool_clone = can_use_tool.clone();
 
                                     tokio::spawn(async move {
                                         if let Err(e) = Self::handle_control_request(
@@ -230,6 +265,7 @@ impl QueryFull {
                                             transport_clone,
                                             hook_callbacks_clone,
                                             sdk_mcp_servers_clone,
+                                            can_use_tool_clone,
                                         )
                                         .await
                                         {
@@ -266,6 +302,7 @@ impl QueryFull {
         transport: Arc<dyn Transport>,
         hook_callbacks: Arc<DashMap<String, HookCallback>>,
         sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
+        can_use_tool: Option<CanUseToolCallback>,
     ) -> Result<()> {
         let request_id = request.request_id;
         let request_data = request.request;
@@ -276,6 +313,9 @@ impl QueryFull {
             .ok_or_else(|| ClaudeError::ControlProtocol("Missing subtype".to_string()))?;
 
         let response_data: serde_json::Value = match subtype {
+            "can_use_tool" => {
+                Self::handle_can_use_tool_control_request(&request_data, can_use_tool).await?
+            }
             "hook_callback" => {
                 // Execute hook callback
                 let callback_id = request_data
@@ -362,6 +402,38 @@ impl QueryFull {
         transport.write(&response_str).await?;
 
         Ok(())
+    }
+
+    async fn handle_can_use_tool_control_request(
+        request_data: &serde_json::Value,
+        can_use_tool: Option<CanUseToolCallback>,
+    ) -> Result<serde_json::Value> {
+        let request: CanUseToolControlRequest = serde_json::from_value(request_data.clone())
+            .map_err(|e| {
+                ClaudeError::ControlProtocol(format!("Failed to parse can_use_tool request: {}", e))
+            })?;
+
+        let tool_name = request.tool_name.ok_or_else(|| {
+            ClaudeError::ControlProtocol("Missing tool_name for can_use_tool".to_string())
+        })?;
+
+        let context = ToolPermissionContext {
+            signal: None,
+            suggestions: request.suggestions.unwrap_or_default(),
+            tool_use_id: request.tool_use_id,
+        };
+
+        let result = match can_use_tool {
+            Some(callback) => callback(tool_name, request.tool_input, context).await,
+            None => PermissionResult::Deny(PermissionResultDeny {
+                message: "No permission callback registered".to_string(),
+                interrupt: false,
+            }),
+        };
+
+        serde_json::to_value(&result).map_err(|e| {
+            ClaudeError::ControlProtocol(format!("Failed to serialize permission result: {}", e))
+        })
     }
 
     /// Send control request to CLI

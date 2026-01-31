@@ -18,6 +18,8 @@ pub struct ToolPermissionContext {
     pub signal: Option<()>,
     /// Permission suggestions from Claude
     pub suggestions: Vec<PermissionUpdate>,
+    /// Tool use ID from the content block (if available)
+    pub tool_use_id: Option<String>,
 }
 
 /// Result of a permission check

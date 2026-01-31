@@ -155,6 +155,29 @@ impl ClaudeClient {
         .to_string()
     }
 
+    /// Normalize permission prompt settings when using `can_use_tool`.
+    ///
+    /// Claude Code CLI uses `--permission-prompt-tool stdio` to route permission prompts
+    /// through the control protocol. If `can_use_tool` is set, default to `stdio`.
+    fn normalize_permission_prompt_tool_name(options: &mut ClaudeAgentOptions) -> Result<()> {
+        if options.can_use_tool.is_some() {
+            match options.permission_prompt_tool_name.as_deref() {
+                None => {
+                    options.permission_prompt_tool_name = Some("stdio".to_string());
+                }
+                Some("stdio") => {}
+                Some(other) => {
+                    return Err(ClaudeError::InvalidConfig(format!(
+                        "can_use_tool requires permission_prompt_tool_name='stdio', got '{}'",
+                        other
+                    )));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Common setup for QueryFull after transport is connected
     ///
     /// This handles the common initialization logic shared between
@@ -163,6 +186,9 @@ impl ClaudeClient {
         // Extract SDK MCP servers from options
         let sdk_mcp_servers = self.extract_sdk_mcp_servers();
         query.set_sdk_mcp_servers(sdk_mcp_servers);
+
+        // Register permission callback (control protocol)
+        query.set_can_use_tool(self.options.can_use_tool.clone());
 
         // Build hooks configuration
         let hooks = self.build_hooks_config();
@@ -206,7 +232,9 @@ impl ClaudeClient {
     /// let client = ClaudeClient::try_new(ClaudeAgentOptions::default())?;
     /// # Ok::<(), claude_agent_sdk_rs::ClaudeError>(())
     /// ```
-    pub fn try_new(options: ClaudeAgentOptions) -> Result<Self> {
+    pub fn try_new(mut options: ClaudeAgentOptions) -> Result<Self> {
+        Self::normalize_permission_prompt_tool_name(&mut options)?;
+
         // Validate by attempting to create transport (but don't keep it)
         let prompt = QueryPrompt::Streaming;
         let _ = SubprocessTransport::new(prompt, options.clone())?;
@@ -298,6 +326,8 @@ impl ClaudeClient {
         if self.connected {
             return Ok(());
         }
+
+        Self::normalize_permission_prompt_tool_name(&mut self.options)?;
 
         // Create transport in streaming mode (no initial prompt)
         let prompt = QueryPrompt::Streaming;
