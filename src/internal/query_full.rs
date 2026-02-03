@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tokio::sync::oneshot;
 
 use crate::errors::{ClaudeError, Result};
@@ -96,6 +97,8 @@ pub struct QueryFull {
     pub(crate) message_rx: flume::Receiver<serde_json::Value>,
     /// Initialization result - set once during initialize(), read many times
     initialization_result: OnceLock<serde_json::Value>,
+    /// Timeout for initialization handshake (default 60s)
+    init_timeout: Duration,
 }
 
 impl QueryFull {
@@ -114,6 +117,7 @@ impl QueryFull {
             message_tx,
             message_rx,
             initialization_result: OnceLock::new(),
+            init_timeout: Duration::from_secs(60),
         }
     }
 
@@ -133,6 +137,7 @@ impl QueryFull {
             message_tx,
             message_rx,
             initialization_result: OnceLock::new(),
+            init_timeout: Duration::from_secs(60),
         }
     }
 
@@ -147,6 +152,11 @@ impl QueryFull {
     /// Set can_use_tool callback for permission handling
     pub fn set_can_use_tool(&mut self, callback: Option<CanUseToolCallback>) {
         self.can_use_tool = callback;
+    }
+
+    /// Set timeout for initialization handshake
+    pub fn set_init_timeout(&mut self, timeout: Duration) {
+        self.init_timeout = timeout;
     }
 
     /// Initialize with hooks
@@ -196,7 +206,16 @@ impl QueryFull {
             "hooks": if hooks_config.is_empty() { json!(null) } else { json!(hooks_config) }
         });
 
-        let response = self.send_control_request(request).await?;
+        // Use timeout to prevent indefinite blocking when MCP servers are slow to start
+        let response = tokio::time::timeout(self.init_timeout, self.send_control_request(request))
+            .await
+            .map_err(|_| {
+                ClaudeError::ControlProtocol(format!(
+                    "Initialization timed out after {:?} - MCP servers may be slow to start. \
+                     Consider increasing init_timeout in ClaudeAgentOptions.",
+                    self.init_timeout
+                ))
+            })??;
 
         // Store initialization result for get_server_info() (set once, read many)
         let _ = self.initialization_result.set(response.clone());

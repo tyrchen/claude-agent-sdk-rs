@@ -190,6 +190,9 @@ impl ClaudeClient {
         // Register permission callback (control protocol)
         query.set_can_use_tool(self.options.can_use_tool.clone());
 
+        // Set initialization timeout from options
+        query.set_init_timeout(self.options.init_timeout);
+
         // Build hooks configuration
         let hooks = self.build_hooks_config();
 

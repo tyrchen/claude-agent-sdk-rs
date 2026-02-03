@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use typed_builder::TypedBuilder;
 
 use super::efficiency::EfficiencyConfig;
@@ -161,6 +162,27 @@ pub struct ClaudeAgentOptions {
     /// ```
     #[builder(default, setter(strip_option))]
     pub efficiency: Option<EfficiencyConfig>,
+
+    /// Timeout for CLI initialization handshake.
+    ///
+    /// During `connect()`, the SDK sends an initialize request to the CLI and waits
+    /// for a response. If MCP servers are configured, the CLI waits for them to start
+    /// before responding. This timeout prevents indefinite blocking.
+    ///
+    /// Default: 60 seconds
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use claude_agent_sdk_rs::ClaudeAgentOptions;
+    /// use std::time::Duration;
+    ///
+    /// let options = ClaudeAgentOptions::builder()
+    ///     .init_timeout(Duration::from_secs(30))
+    ///     .build();
+    /// ```
+    #[builder(default = Duration::from_secs(60), setter(into))]
+    pub init_timeout: Duration,
 }
 
 impl Default for ClaudeAgentOptions {
