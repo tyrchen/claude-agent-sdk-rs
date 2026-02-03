@@ -33,7 +33,7 @@ pub enum PermissionResult {
 }
 
 /// Permission result for allowing tool use
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PermissionResultAllow {
     /// Updated tool input (if modified)
     #[serde(skip_serializing_if = "Option::is_none", rename = "updatedInput")]
@@ -41,6 +41,17 @@ pub struct PermissionResultAllow {
     /// Permission updates to apply
     #[serde(skip_serializing_if = "Option::is_none", rename = "updatedPermissions")]
     pub updated_permissions: Option<Vec<PermissionUpdate>>,
+}
+
+impl Default for PermissionResultAllow {
+    fn default() -> Self {
+        Self {
+            // Claude Code CLI requires updatedInput to be present (not omitted)
+            // even when no modifications are made. An empty object satisfies this.
+            updated_input: Some(serde_json::json!({})),
+            updated_permissions: None,
+        }
+    }
 }
 
 /// Permission result for denying tool use
@@ -171,6 +182,18 @@ mod tests {
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["behavior"], "allow");
         assert_eq!(json["updatedInput"]["modified"], true);
+    }
+
+    #[test]
+    fn test_permission_result_allow_default_includes_updated_input() {
+        // Claude Code CLI requires updatedInput to be present even when empty.
+        // This test ensures Default::default() serializes with updatedInput: {}
+        let result = PermissionResult::Allow(Default::default());
+
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["behavior"], "allow");
+        assert_eq!(json["updatedInput"], json!({}));
+        assert!(json.get("updatedPermissions").is_none());
     }
 
     #[test]
