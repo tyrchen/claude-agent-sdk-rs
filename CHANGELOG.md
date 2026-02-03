@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.6.4](https://github.com/compare/v0.6.3..v0.6.4) - 2026-02-03
+
+### Bug Fixes
+
+- Ensure PermissionResultAllow serializes updatedInput field - ([f37d433](https://github.com/commit/f37d433)) - Christian Smith
+
+  Claude Code CLI's Zod schema validation requires the `updatedInput` field to be present in permission responses, even when empty. The derived `Default` implementation set `updated_input` to `None`, which caused `skip_serializing_if` to omit the field entirely, resulting in `ZodError: expected record, received undefined`. Changed the `Default` implementation to initialize `updated_input` with `Some(json!({}))`.
+
+---
 ## [0.6.3](https://github.com/compare/v0.6.2..v0.6.3) - 2026-01-24
 
 ### Bug Fixes
