@@ -13,6 +13,39 @@ use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 use tracing::warn;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+/// Windows flag to prevent console window from appearing when spawning subprocess
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Create a std::process::Command that won't show a console window on Windows
+#[cfg(target_os = "windows")]
+fn create_sync_hidden_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
+#[cfg(not(target_os = "windows"))]
+fn create_sync_hidden_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
+    std::process::Command::new(program)
+}
+
+/// Create a tokio::process::Command that won't show a console window on Windows
+#[cfg(target_os = "windows")]
+fn create_async_hidden_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
+#[cfg(not(target_os = "windows"))]
+fn create_async_hidden_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    Command::new(program)
+}
+
 use crate::errors::{
     ClaudeError, CliNotFoundError, ConnectionError, JsonDecodeError, ProcessError, Result,
 };
@@ -120,7 +153,7 @@ impl SubprocessTransport {
     fn find_cli() -> Result<PathBuf> {
         // Strategy 1: Try executing 'claude' directly from PATH
         // This is the most reliable method as it respects the shell's PATH resolution
-        if let Ok(output) = std::process::Command::new("claude")
+        if let Ok(output) = create_sync_hidden_command("claude")
             .arg("--version")
             .output()
             && output.status.success()
@@ -145,7 +178,7 @@ impl SubprocessTransport {
 
         // Strategy 3: Use 'where' command on Windows
         #[cfg(target_os = "windows")]
-        if let Ok(output) = std::process::Command::new("where").arg("claude").output() {
+        if let Ok(output) = create_sync_hidden_command("where").arg("claude").output() {
             if output.status.success() {
                 let path_str = String::from_utf8_lossy(&output.stdout);
                 // 'where' returns all matches, take the first one
@@ -571,7 +604,7 @@ impl SubprocessTransport {
             return Ok(());
         }
 
-        let output = Command::new(&self.cli_path)
+        let output = create_async_hidden_command(&self.cli_path)
             .arg("--version")
             .output()
             .await
@@ -635,8 +668,8 @@ impl Transport for SubprocessTransport {
         let args = self.build_command();
         let env = self.build_env();
 
-        // Build command
-        let mut cmd = Command::new(&self.cli_path);
+        // Build command (hidden console window on Windows)
+        let mut cmd = create_async_hidden_command(&self.cli_path);
         cmd.args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
