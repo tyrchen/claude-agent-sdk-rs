@@ -118,6 +118,17 @@ impl SubprocessTransport {
 
     /// Find the Claude CLI executable
     fn find_cli() -> Result<PathBuf> {
+        // Strategy 0: Check CLAUDE_CLI_PATH environment variable first
+        // This allows parent processes (e.g., seren-desktop) to explicitly specify the CLI path
+        // and is more reliable than PATH resolution when running as a sidecar in GUI apps
+        if let Ok(cli_path) = std::env::var("CLAUDE_CLI_PATH") {
+            let path = PathBuf::from(&cli_path);
+            if path.exists() && path.is_file() {
+                tracing::info!("[SDK] Using CLAUDE_CLI_PATH: {}", cli_path);
+                return Ok(path);
+            }
+        }
+
         // Strategy 1: Try executing 'claude' directly from PATH
         // This is the most reliable method as it respects the shell's PATH resolution
         if let Ok(output) = std::process::Command::new("claude")
@@ -202,14 +213,6 @@ impl SubprocessTransport {
 
         // Check each common path
         for path in common_paths {
-            if path.exists() && path.is_file() {
-                return Ok(path);
-            }
-        }
-
-        // Strategy 5: Check if CLAUDE_CLI_PATH environment variable is set
-        if let Ok(cli_path) = std::env::var("CLAUDE_CLI_PATH") {
-            let path = PathBuf::from(cli_path);
             if path.exists() && path.is_file() {
                 return Ok(path);
             }
