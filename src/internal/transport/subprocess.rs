@@ -591,12 +591,12 @@ impl SubprocessTransport {
             .trim();
 
         if !check_version(version) {
-            warn!(
-                "Claude Code CLI ({}) version {} is below minimum required version {}. Some features may not work correctly.",
-                self.cli_path.display(),
+            return Err(ClaudeError::Connection(ConnectionError::new(format!(
+                "Claude Code CLI version {} is below minimum required version {}. \
+                 Please update with: npm install -g @anthropic-ai/claude-code@latest",
                 version,
                 MIN_CLI_VERSION
-            );
+            ))));
         }
 
         Ok(())

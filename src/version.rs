@@ -45,7 +45,11 @@ pub fn get_claude_code_version() -> Option<&'static str> {
 }
 
 /// Minimum required Claude Code CLI version
-pub const MIN_CLI_VERSION: &str = "2.0.0";
+///
+/// Version 2.1.30+ is required for proper stream-json protocol support.
+/// Earlier versions (e.g., 2.1.19) have protocol compatibility issues that cause
+/// initialization hangs when using the SDK.
+pub const MIN_CLI_VERSION: &str = "2.1.30";
 
 /// Environment variable to skip version check
 pub const SKIP_VERSION_CHECK_ENV: &str = "CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK";
@@ -111,11 +115,16 @@ mod tests {
 
     #[test]
     fn test_check_version() {
-        assert!(check_version("2.0.0"));
-        assert!(check_version("2.0.1"));
-        assert!(check_version("2.1.0"));
+        // Versions at or above MIN_CLI_VERSION (2.1.30) should pass
+        assert!(check_version("2.1.30"));
+        assert!(check_version("2.1.31"));
+        assert!(check_version("2.2.0"));
         assert!(check_version("3.0.0"));
+        // Versions below MIN_CLI_VERSION should fail
+        assert!(!check_version("2.1.29"));
+        assert!(!check_version("2.1.20"));
+        assert!(!check_version("2.1.19"));
+        assert!(!check_version("2.0.0"));
         assert!(!check_version("1.9.9"));
-        assert!(!check_version("1.99.99"));
     }
 }
