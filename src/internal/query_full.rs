@@ -12,6 +12,9 @@ use tokio::sync::oneshot;
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
 use crate::types::mcp::McpSdkServerConfig;
+use crate::types::permissions::{
+    CanUseToolCallback, PermissionResult, ToolPermissionContext,
+};
 
 use super::transport::Transport;
 
@@ -61,6 +64,8 @@ pub struct QueryFull {
     hook_callbacks: Arc<DashMap<String, HookCallback>>,
     /// SDK MCP servers - concurrent access via DashMap
     sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
+    /// Tool permission callback - optional, for dynamic permission decisions
+    can_use_tool: Option<CanUseToolCallback>,
     next_callback_id: Arc<AtomicU64>,
     request_counter: Arc<AtomicU64>,
     /// Pending control request responses - concurrent access via DashMap
@@ -81,6 +86,7 @@ impl QueryFull {
             transport: Arc::from(transport),
             hook_callbacks: Arc::new(DashMap::new()),
             sdk_mcp_servers: Arc::new(DashMap::new()),
+            can_use_tool: None,
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(DashMap::new()),
@@ -99,6 +105,7 @@ impl QueryFull {
             transport,
             hook_callbacks: Arc::new(DashMap::new()),
             sdk_mcp_servers: Arc::new(DashMap::new()),
+            can_use_tool: None,
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(DashMap::new()),
@@ -114,6 +121,11 @@ impl QueryFull {
         for (name, config) in servers {
             self.sdk_mcp_servers.insert(name, config);
         }
+    }
+
+    /// Set tool permission callback
+    pub fn set_can_use_tool(&mut self, callback: Option<CanUseToolCallback>) {
+        self.can_use_tool = callback;
     }
 
     /// Initialize with hooks
@@ -180,6 +192,7 @@ impl QueryFull {
         let transport_for_hooks = Arc::clone(&self.transport);
         let hook_callbacks = Arc::clone(&self.hook_callbacks);
         let sdk_mcp_servers = Arc::clone(&self.sdk_mcp_servers);
+        let can_use_tool = self.can_use_tool.clone();
         let pending_responses = Arc::clone(&self.pending_responses);
         let message_tx = self.message_tx.clone();
 
@@ -216,13 +229,14 @@ impl QueryFull {
                                 }
                             }
                             Some("control_request") => {
-                                // Handle incoming control request (e.g., hook callback, MCP message)
+                                // Handle incoming control request (e.g., hook callback, MCP message, permission)
                                 if let Ok(request) = serde_json::from_value::<IncomingControlRequest>(
                                     message.clone(),
                                 ) {
                                     let transport_clone = Arc::clone(&transport_for_hooks);
                                     let hook_callbacks_clone = Arc::clone(&hook_callbacks);
                                     let sdk_mcp_servers_clone = Arc::clone(&sdk_mcp_servers);
+                                    let can_use_tool_clone = can_use_tool.clone();
 
                                     tokio::spawn(async move {
                                         if let Err(e) = Self::handle_control_request(
@@ -230,6 +244,7 @@ impl QueryFull {
                                             transport_clone,
                                             hook_callbacks_clone,
                                             sdk_mcp_servers_clone,
+                                            can_use_tool_clone,
                                         )
                                         .await
                                         {
@@ -266,6 +281,7 @@ impl QueryFull {
         transport: Arc<dyn Transport>,
         hook_callbacks: Arc<DashMap<String, HookCallback>>,
         sdk_mcp_servers: Arc<DashMap<String, McpSdkServerConfig>>,
+        can_use_tool: Option<CanUseToolCallback>,
     ) -> Result<()> {
         let request_id = request.request_id;
         let request_data = request.request;
@@ -276,6 +292,66 @@ impl QueryFull {
             .ok_or_else(|| ClaudeError::ControlProtocol("Missing subtype".to_string()))?;
 
         let response_data: serde_json::Value = match subtype {
+            "can_use_tool" => {
+                // Handle tool permission request
+                let callback = can_use_tool.ok_or_else(|| {
+                    ClaudeError::ControlProtocol(
+                        "can_use_tool callback is not provided".to_string(),
+                    )
+                })?;
+
+                let tool_name = request_data
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ClaudeError::ControlProtocol("Missing tool_name".to_string())
+                    })?
+                    .to_string();
+
+                let original_input = request_data
+                    .get("input")
+                    .cloned()
+                    .unwrap_or(json!({}));
+
+                // Parse permission suggestions if present
+                let suggestions = request_data
+                    .get("permission_suggestions")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+
+                let context = ToolPermissionContext {
+                    signal: None,
+                    suggestions,
+                };
+
+                // Call the permission callback
+                let result = callback(tool_name, original_input.clone(), context).await;
+
+                // Convert PermissionResult to response format
+                match result {
+                    PermissionResult::Allow(allow) => {
+                        let mut response = json!({
+                            "behavior": "allow",
+                            "updatedInput": allow.updated_input.unwrap_or(original_input)
+                        });
+                        if let Some(updated_permissions) = allow.updated_permissions {
+                            response["updatedPermissions"] = serde_json::to_value(updated_permissions)
+                                .unwrap_or(json!([]));
+                        }
+                        response
+                    }
+                    PermissionResult::Deny(deny) => {
+                        let mut response = json!({
+                            "behavior": "deny",
+                            "message": deny.message
+                        });
+                        if deny.interrupt {
+                            response["interrupt"] = json!(true);
+                        }
+                        response
+                    }
+                }
+            }
             "hook_callback" => {
                 // Execute hook callback
                 let callback_id = request_data
@@ -501,5 +577,293 @@ impl QueryFull {
             .handle_message(message)
             .await
             .map_err(|e| ClaudeError::ControlProtocol(format!("MCP server error: {}", e)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::permissions::{PermissionResultAllow, PermissionResultDeny};
+    use async_trait::async_trait;
+    use futures::future::BoxFuture;
+    use futures::FutureExt;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Mutex;
+
+    /// Simple mock transport for testing - matches Python's MockTransport pattern
+    struct MockTransport {
+        written_messages: Mutex<Vec<String>>,
+    }
+
+    impl MockTransport {
+        fn new() -> Self {
+            Self {
+                written_messages: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn written_messages(&self) -> Vec<String> {
+            self.written_messages.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait]
+    impl Transport for MockTransport {
+        async fn connect(&self) -> Result<()> {
+            Ok(())
+        }
+
+        async fn close(&self) -> Result<()> {
+            Ok(())
+        }
+
+        async fn write(&self, data: &str) -> Result<()> {
+            self.written_messages.lock().unwrap().push(data.to_string());
+            Ok(())
+        }
+
+        async fn end_input(&self) -> Result<()> {
+            Ok(())
+        }
+
+        fn read_messages(&self) -> futures::stream::BoxStream<'static, Result<serde_json::Value>> {
+            futures::stream::empty().boxed()
+        }
+
+        fn is_ready(&self) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn test_permission_callback_allow() {
+        // Track if callback was invoked
+        let callback_invoked = Arc::new(AtomicBool::new(false));
+        let callback_invoked_clone = Arc::clone(&callback_invoked);
+
+        let allow_callback: CanUseToolCallback = Arc::new(
+            move |tool_name: String,
+                  tool_input: serde_json::Value,
+                  _context: ToolPermissionContext|
+                  -> BoxFuture<'static, PermissionResult> {
+                let invoked = Arc::clone(&callback_invoked_clone);
+                async move {
+                    invoked.store(true, Ordering::SeqCst);
+                    assert_eq!(tool_name, "TestTool");
+                    assert_eq!(tool_input["param"], "value");
+                    PermissionResult::Allow(PermissionResultAllow::default())
+                }
+                .boxed()
+            },
+        );
+
+        let transport = Arc::new(MockTransport::new());
+
+        // Simulate control request - matches Python test structure
+        let request = IncomingControlRequest {
+            type_: "control_request".to_string(),
+            request_id: "test-1".to_string(),
+            request: json!({
+                "subtype": "can_use_tool",
+                "tool_name": "TestTool",
+                "input": {"param": "value"},
+                "permission_suggestions": []
+            }),
+        };
+
+        QueryFull::handle_control_request(
+            request,
+            transport.clone(),
+            Arc::new(DashMap::new()),
+            Arc::new(DashMap::new()),
+            Some(allow_callback),
+        )
+        .await
+        .unwrap();
+
+        // Check callback was invoked
+        assert!(
+            callback_invoked.load(Ordering::SeqCst),
+            "Permission callback should have been invoked"
+        );
+
+        // Check response was sent
+        let written = transport.written_messages();
+        assert_eq!(written.len(), 1);
+        assert!(written[0].contains(r#""behavior":"allow""#));
+    }
+
+    #[tokio::test]
+    async fn test_permission_callback_deny() {
+        let deny_callback: CanUseToolCallback = Arc::new(
+            move |_tool_name: String,
+                  _tool_input: serde_json::Value,
+                  _context: ToolPermissionContext|
+                  -> BoxFuture<'static, PermissionResult> {
+                async move {
+                    PermissionResult::Deny(PermissionResultDeny {
+                        message: "Security policy violation".to_string(),
+                        interrupt: false,
+                    })
+                }
+                .boxed()
+            },
+        );
+
+        let transport = Arc::new(MockTransport::new());
+
+        let request = IncomingControlRequest {
+            type_: "control_request".to_string(),
+            request_id: "test-2".to_string(),
+            request: json!({
+                "subtype": "can_use_tool",
+                "tool_name": "DangerousTool",
+                "input": {"command": "rm -rf /"},
+                "permission_suggestions": ["deny"]
+            }),
+        };
+
+        QueryFull::handle_control_request(
+            request,
+            transport.clone(),
+            Arc::new(DashMap::new()),
+            Arc::new(DashMap::new()),
+            Some(deny_callback),
+        )
+        .await
+        .unwrap();
+
+        // Check response
+        let written = transport.written_messages();
+        assert_eq!(written.len(), 1);
+        assert!(written[0].contains(r#""behavior":"deny""#));
+        assert!(written[0].contains("Security policy violation"));
+    }
+
+    #[tokio::test]
+    async fn test_permission_callback_input_modification() {
+        let modify_callback: CanUseToolCallback = Arc::new(
+            move |_tool_name: String,
+                  tool_input: serde_json::Value,
+                  _context: ToolPermissionContext|
+                  -> BoxFuture<'static, PermissionResult> {
+                async move {
+                    // Modify the input to add safety flag
+                    let mut modified_input = tool_input.clone();
+                    modified_input["safe_mode"] = json!(true);
+                    PermissionResult::Allow(PermissionResultAllow {
+                        updated_input: Some(modified_input),
+                        updated_permissions: None,
+                    })
+                }
+                .boxed()
+            },
+        );
+
+        let transport = Arc::new(MockTransport::new());
+
+        let request = IncomingControlRequest {
+            type_: "control_request".to_string(),
+            request_id: "test-3".to_string(),
+            request: json!({
+                "subtype": "can_use_tool",
+                "tool_name": "WriteTool",
+                "input": {"file_path": "/etc/passwd"},
+                "permission_suggestions": []
+            }),
+        };
+
+        QueryFull::handle_control_request(
+            request,
+            transport.clone(),
+            Arc::new(DashMap::new()),
+            Arc::new(DashMap::new()),
+            Some(modify_callback),
+        )
+        .await
+        .unwrap();
+
+        // Check response includes modified input
+        let written = transport.written_messages();
+        assert_eq!(written.len(), 1);
+        assert!(written[0].contains(r#""behavior":"allow""#));
+        assert!(written[0].contains(r#""safe_mode":true"#));
+    }
+
+    #[tokio::test]
+    async fn test_permission_callback_deny_with_interrupt() {
+        let callback: CanUseToolCallback = Arc::new(
+            move |_tool_name: String,
+                  _tool_input: serde_json::Value,
+                  _context: ToolPermissionContext|
+                  -> BoxFuture<'static, PermissionResult> {
+                async move {
+                    PermissionResult::Deny(PermissionResultDeny {
+                        message: "Critical security violation".to_string(),
+                        interrupt: true,
+                    })
+                }
+                .boxed()
+            },
+        );
+
+        let transport = Arc::new(MockTransport::new());
+
+        let request = IncomingControlRequest {
+            type_: "control_request".to_string(),
+            request_id: "test-4".to_string(),
+            request: json!({
+                "subtype": "can_use_tool",
+                "tool_name": "CriticalTool",
+                "input": {},
+                "permission_suggestions": []
+            }),
+        };
+
+        QueryFull::handle_control_request(
+            request,
+            transport.clone(),
+            Arc::new(DashMap::new()),
+            Arc::new(DashMap::new()),
+            Some(callback),
+        )
+        .await
+        .unwrap();
+
+        // Check response includes interrupt flag
+        let written = transport.written_messages();
+        assert_eq!(written.len(), 1);
+        assert!(written[0].contains(r#""behavior":"deny""#));
+        assert!(written[0].contains(r#""interrupt":true"#));
+    }
+
+    #[tokio::test]
+    async fn test_permission_callback_not_provided() {
+        let transport = Arc::new(MockTransport::new());
+
+        let request = IncomingControlRequest {
+            type_: "control_request".to_string(),
+            request_id: "test-5".to_string(),
+            request: json!({
+                "subtype": "can_use_tool",
+                "tool_name": "TestTool",
+                "input": {},
+                "permission_suggestions": []
+            }),
+        };
+
+        // Should error when callback is not provided
+        let result = QueryFull::handle_control_request(
+            request,
+            transport,
+            Arc::new(DashMap::new()),
+            Arc::new(DashMap::new()),
+            None, // No callback
+        )
+        .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("can_use_tool callback is not provided"));
     }
 }
