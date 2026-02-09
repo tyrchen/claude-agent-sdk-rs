@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 ---
+## [0.6.4](https://github.com/compare/v0.6.3..v0.6.4) - 2026-02-09
+
+### Features
+
+- **(testing)** Add comprehensive testing mock framework (#15) - ([8bed3d7](https://github.com/commit/8bed3d7cdd02876738a73dfe6be2ccd68d38ca28)) - Tyr Chen
+
+### Miscellaneous Chores
+
+- fix gh action - ([bd2b516](https://github.com/commit/bd2b5166e442c25734138fd62f34e8decc33ef12)) - Tyr Chen
+- update docs - ([ef8abfe](https://github.com/commit/ef8abfec1732f98d2d20042441b445d68fa43987)) - Tyr Chen
+- bump version to 0.6.4 - ([7da7f5e](https://github.com/commit/7da7f5e597c8dffd280cdbe0e56eaa87c952e6aa)) - Tyr Chen
+
+### Other
+
+- Update CHANGELOG.md - ([8d8adfc](https://github.com/commit/8d8adfc49b2165e2f17dd6f98f960b5d30684933)) - Tyr Chen
+- Hide console window on Windows (CREATE_NO_WINDOW) (#19) - ([03e657f](https://github.com/commit/03e657fdbcba8cf4dfff38d769a3764ccf0ed652)) - Paul-Louis Pröve
+
+### Refactoring
+
+- Improve code quality with DRY/SOLID principles and add tests (#16) - ([90eb5fd](https://github.com/commit/90eb5fd50933f002242b28b867ba099d5af130c2)) - Tyr Chen
+
+---
 ## [0.6.3](https://github.com/compare/v0.6.2..v0.6.3) - 2026-01-24
 
 ### Bug Fixes
