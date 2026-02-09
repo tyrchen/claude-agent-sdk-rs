@@ -164,6 +164,11 @@ impl ClaudeClient {
         let sdk_mcp_servers = self.extract_sdk_mcp_servers();
         query.set_sdk_mcp_servers(sdk_mcp_servers);
 
+        // Set the can_use_tool callback if configured
+        if let Some(callback) = &self.options.can_use_tool {
+            query.set_can_use_tool(Some(callback.clone()));
+        }
+
         // Build hooks configuration
         let hooks = self.build_hooks_config();
 

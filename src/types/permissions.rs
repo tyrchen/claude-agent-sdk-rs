@@ -18,6 +18,8 @@ pub struct ToolPermissionContext {
     pub signal: Option<()>,
     /// Permission suggestions from Claude
     pub suggestions: Vec<PermissionUpdate>,
+    /// Tool use ID from the CLI (used to correlate with tool calls)
+    pub tool_use_id: Option<String>,
 }
 
 /// Result of a permission check
@@ -34,7 +36,9 @@ pub enum PermissionResult {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PermissionResultAllow {
     /// Updated tool input (if modified)
-    #[serde(skip_serializing_if = "Option::is_none", rename = "updatedInput")]
+    /// Note: This field must always be serialized (even as null) because the CLI's
+    /// Zod schema validation expects it to be present in the response.
+    #[serde(rename = "updatedInput")]
     pub updated_input: Option<serde_json::Value>,
     /// Permission updates to apply
     #[serde(skip_serializing_if = "Option::is_none", rename = "updatedPermissions")]
