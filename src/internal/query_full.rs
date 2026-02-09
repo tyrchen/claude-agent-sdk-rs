@@ -12,9 +12,7 @@ use tokio::sync::oneshot;
 use crate::errors::{ClaudeError, Result};
 use crate::types::hooks::{HookCallback, HookContext, HookInput, HookMatcher};
 use crate::types::mcp::McpSdkServerConfig;
-use crate::types::permissions::{
-    CanUseToolCallback, PermissionResult, ToolPermissionContext,
-};
+use crate::types::permissions::{CanUseToolCallback, PermissionResult, ToolPermissionContext};
 
 use super::transport::Transport;
 
@@ -303,15 +301,10 @@ impl QueryFull {
                 let tool_name = request_data
                     .get("tool_name")
                     .and_then(|v| v.as_str())
-                    .ok_or_else(|| {
-                        ClaudeError::ControlProtocol("Missing tool_name".to_string())
-                    })?
+                    .ok_or_else(|| ClaudeError::ControlProtocol("Missing tool_name".to_string()))?
                     .to_string();
 
-                let original_input = request_data
-                    .get("input")
-                    .cloned()
-                    .unwrap_or(json!({}));
+                let original_input = request_data.get("input").cloned().unwrap_or(json!({}));
 
                 // Parse permission suggestions if present
                 let suggestions = request_data
@@ -335,8 +328,8 @@ impl QueryFull {
                             "updatedInput": allow.updated_input.unwrap_or(original_input)
                         });
                         if let Some(updated_permissions) = allow.updated_permissions {
-                            response["updatedPermissions"] = serde_json::to_value(updated_permissions)
-                                .unwrap_or(json!([]));
+                            response["updatedPermissions"] =
+                                serde_json::to_value(updated_permissions).unwrap_or(json!([]));
                         }
                         response
                     }
@@ -585,10 +578,10 @@ mod tests {
     use super::*;
     use crate::types::permissions::{PermissionResultAllow, PermissionResultDeny};
     use async_trait::async_trait;
-    use futures::future::BoxFuture;
     use futures::FutureExt;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use futures::future::BoxFuture;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     /// Simple mock transport for testing - matches Python's MockTransport pattern
     struct MockTransport {
@@ -864,6 +857,9 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("can_use_tool callback is not provided"));
+        assert!(
+            err.to_string()
+                .contains("can_use_tool callback is not provided")
+        );
     }
 }
