@@ -12,7 +12,7 @@ pub type CanUseToolCallback = Arc<
 >;
 
 /// Context provided to permission callbacks
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ToolPermissionContext {
     /// Abort signal (future feature)
     pub signal: Option<()>,
