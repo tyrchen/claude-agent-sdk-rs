@@ -143,11 +143,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Configure options with permission callback
-    // Note: Use `tools` to restrict available tools (not `allowed_tools`)
+    // Use Default permission mode so the CLI asks the SDK for permission on each tool use.
+    // Don't pre-allow any tools - let the callback decide.
     let options = ClaudeAgentOptions {
-        tools: Some(["Write", "Read", "Bash"].into()),
         model: Some("sonnet".to_string()), // Use Sonnet for lower cost
-        permission_mode: Some(claude_agent_sdk_rs::PermissionMode::AcceptEdits),
         can_use_tool: Some(permission_callback),
         max_turns: Some(10),
         ..Default::default()

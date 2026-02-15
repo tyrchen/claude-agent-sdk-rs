@@ -164,6 +164,11 @@ impl ClaudeClient {
         let sdk_mcp_servers = self.extract_sdk_mcp_servers();
         query.set_sdk_mcp_servers(sdk_mcp_servers);
 
+        // Set permission callback if provided
+        if self.options.can_use_tool.is_some() {
+            query.set_can_use_tool(self.options.can_use_tool.clone());
+        }
+
         // Build hooks configuration
         let hooks = self.build_hooks_config();
 
@@ -299,9 +304,23 @@ impl ClaudeClient {
             return Ok(());
         }
 
+        // Configure options for permission callback if provided
+        let mut configured_options = self.options.clone();
+        if configured_options.can_use_tool.is_some() {
+            // can_use_tool requires permission_prompt_tool_name="stdio" for control protocol
+            if configured_options.permission_prompt_tool_name.is_some() {
+                return Err(ClaudeError::InvalidConfig(
+                    "can_use_tool callback cannot be used with permission_prompt_tool_name. \
+                     Please use one or the other."
+                        .to_string(),
+                ));
+            }
+            configured_options.permission_prompt_tool_name = Some("stdio".to_string());
+        }
+
         // Create transport in streaming mode (no initial prompt)
         let prompt = QueryPrompt::Streaming;
-        let transport = SubprocessTransport::new(prompt, self.options.clone())?;
+        let transport = SubprocessTransport::new(prompt, configured_options)?;
 
         // Don't send initial prompt - we'll use query() for that
         transport.connect().await?;
