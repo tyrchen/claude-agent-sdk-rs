@@ -189,6 +189,9 @@ impl SubprocessTransport {
         {
             if let Some(ref home) = home_dir {
                 common_paths.extend(vec![
+                    // Native installer location (official default since v2.x)
+                    home.join(".local\\bin\\claude.exe"),
+                    // Legacy npm and older installer locations
                     home.join("AppData\\Local\\Programs\\Claude\\claude.exe"),
                     home.join("AppData\\Roaming\\npm\\claude.cmd"),
                     home.join("AppData\\Roaming\\npm\\claude.exe"),
