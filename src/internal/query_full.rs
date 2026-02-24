@@ -449,7 +449,35 @@ impl QueryFull {
             }
             "can_use_tool" => {
                 // Handle tool permission request (including AskUserQuestion)
-                Self::handle_permission_request(request_data, can_use_tool).await
+                let tool_name = request_data
+                    .get("tool_name")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        ClaudeError::ControlProtocol(
+                            "Missing tool_name in can_use_tool request".to_string(),
+                        )
+                    })?;
+
+                let tool_input = request_data.get("input").cloned().unwrap_or(json!({}));
+
+                let suggestions: Vec<PermissionUpdate> = request_data
+                    .get("suggestions")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+
+                let tool_use_id = request_data
+                    .get("tool_use_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
+                Self::handle_permission_request(
+                    tool_name,
+                    tool_input,
+                    suggestions,
+                    tool_use_id,
+                    can_use_tool,
+                )
+                .await
             }
             _ => Err(ClaudeError::ControlProtocol(format!(
                 "Unsupported control request subtype: {}",
@@ -597,69 +625,14 @@ impl QueryFull {
             .map_err(|e| ClaudeError::ControlProtocol(format!("MCP server error: {}", e)))
     }
 
-    /// Handle tool permission request from CLI
-    ///
-    /// This is called when Claude wants to use a tool and the CLI requests
-    /// permission from the SDK. This includes the `AskUserQuestion` tool,
-    /// where the callback should return answers in the `updated_input` field.
-    ///
-    /// # Request format
-    ///
-    /// ```json
-    /// {
-    ///   "subtype": "can_use_tool",
-    ///   "tool_name": "AskUserQuestion",
-    ///   "input": { "questions": [...] },
-    ///   "suggestions": [...]  // optional permission suggestions
-    /// }
-    /// ```
-    ///
-    /// # Response format
-    ///
-    /// For allow:
-    /// ```json
-    /// {
-    ///   "behavior": "allow",
-    ///   "updatedInput": { ... },
-    ///   "updatedPermissions": [...]  // optional
-    /// }
-    /// ```
-    ///
-    /// For deny:
-    /// ```json
-    /// {
-    ///   "behavior": "deny",
-    ///   "message": "reason",
-    ///   "interrupt": false
-    /// }
-    /// ```
+    /// Handle tool permission request by invoking the can_use_tool callback
     async fn handle_permission_request(
-        request_data: &serde_json::Value,
+        tool_name: &str,
+        tool_input: serde_json::Value,
+        suggestions: Vec<PermissionUpdate>,
+        tool_use_id: Option<String>,
         can_use_tool: Option<CanUseToolCallback>,
     ) -> Result<serde_json::Value> {
-        let tool_name = request_data
-            .get("tool_name")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                ClaudeError::ControlProtocol(
-                    "Missing tool_name in can_use_tool request".to_string(),
-                )
-            })?;
-
-        let tool_input = request_data.get("input").cloned().unwrap_or(json!({}));
-
-        // Parse permission suggestions if present
-        let suggestions: Vec<PermissionUpdate> = request_data
-            .get("suggestions")
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .unwrap_or_default();
-
-        // Extract tool_use_id if present (used to correlate with tool calls in transcript)
-        let tool_use_id = request_data
-            .get("tool_use_id")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
         // If no callback is configured, deny by default
         let callback = match can_use_tool {
             Some(cb) => cb,

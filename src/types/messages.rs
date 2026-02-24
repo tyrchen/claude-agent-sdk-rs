@@ -48,6 +48,9 @@ pub enum Message {
     /// Control cancel request (ignore this - it's internal control protocol)
     #[serde(rename = "control_cancel_request")]
     ControlCancelRequest(serde_json::Value),
+    /// Unknown message type (catches unrecognized variants from the CLI)
+    #[serde(untagged)]
+    Unknown(serde_json::Value),
 }
 
 /// User message
@@ -526,6 +529,23 @@ mod tests {
                 assert_eq!(system.tools.as_ref().unwrap().len(), 3);
             }
             _ => panic!("Expected System variant"),
+        }
+    }
+
+    #[test]
+    fn test_message_unknown_variant_deserialization() {
+        let json_str = r#"{
+            "type": "rate_limit_event",
+            "retry_after_ms": 5000
+        }"#;
+
+        let msg: Message = serde_json::from_str(json_str).unwrap();
+        match msg {
+            Message::Unknown(value) => {
+                assert_eq!(value["type"], "rate_limit_event");
+                assert_eq!(value["retry_after_ms"], 5000);
+            }
+            _ => panic!("Expected Unknown variant"),
         }
     }
 
