@@ -45,6 +45,9 @@ pub enum Message {
     /// User message (rarely used in stream output)
     #[serde(rename = "user")]
     User(UserMessage),
+    /// Rate limit event indicating the API rate limit has been hit
+    #[serde(rename = "rate_limit_event")]
+    RateLimitEvent(RateLimitEvent),
     /// Control cancel request (ignore this - it's internal control protocol)
     #[serde(rename = "control_cancel_request")]
     ControlCancelRequest(serde_json::Value),
@@ -214,6 +217,16 @@ pub struct StreamEvent {
     /// Parent tool use ID (if applicable)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_tool_use_id: Option<String>,
+}
+
+/// Rate limit event indicating the API rate limit has been hit
+///
+/// Emitted by the CLI when a rate limit is encountered. The `retry_after_ms`
+/// field indicates how long to wait before the next request can be made.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitEvent {
+    /// Number of milliseconds to wait before retrying
+    pub retry_after_ms: u64,
 }
 
 /// Content block types
@@ -533,7 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn test_message_unknown_variant_deserialization() {
+    fn test_message_rate_limit_event_deserialization() {
         let json_str = r#"{
             "type": "rate_limit_event",
             "retry_after_ms": 5000
@@ -541,9 +554,37 @@ mod tests {
 
         let msg: Message = serde_json::from_str(json_str).unwrap();
         match msg {
+            Message::RateLimitEvent(event) => {
+                assert_eq!(event.retry_after_ms, 5000);
+            }
+            _ => panic!("Expected RateLimitEvent variant"),
+        }
+    }
+
+    #[test]
+    fn test_message_rate_limit_event_serialization() {
+        let event = RateLimitEvent {
+            retry_after_ms: 3000,
+        };
+        let msg = Message::RateLimitEvent(event);
+
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "rate_limit_event");
+        assert_eq!(json["retry_after_ms"], 3000);
+    }
+
+    #[test]
+    fn test_message_unknown_variant_deserialization() {
+        let json_str = r#"{
+            "type": "some_future_event",
+            "data": "test"
+        }"#;
+
+        let msg: Message = serde_json::from_str(json_str).unwrap();
+        match msg {
             Message::Unknown(value) => {
-                assert_eq!(value["type"], "rate_limit_event");
-                assert_eq!(value["retry_after_ms"], 5000);
+                assert_eq!(value["type"], "some_future_event");
+                assert_eq!(value["data"], "test");
             }
             _ => panic!("Expected Unknown variant"),
         }
