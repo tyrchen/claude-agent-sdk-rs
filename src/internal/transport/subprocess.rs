@@ -567,6 +567,31 @@ impl SubprocessTransport {
         Some(serde_json::to_string(&serde_json::Value::Object(settings_obj)).unwrap_or_default())
     }
 
+}
+
+/// Build a [`Command`] for the given CLI path.
+///
+/// On Windows, batch scripts (`.cmd`, `.bat`) cannot be executed directly via
+/// `CreateProcess` — only PE executables can.  Attempting to do so fails with
+/// `os error 193: %1 is not a valid Win32 application`.  We detect these
+/// extensions and route them through the command interpreter (`cmd.exe /C`).
+fn make_command(cli_path: &PathBuf) -> Command {
+    #[cfg(target_os = "windows")]
+    {
+        let ext = cli_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        if ext.eq_ignore_ascii_case("cmd") || ext.eq_ignore_ascii_case("bat") {
+            let mut cmd = Command::new("cmd");
+            cmd.arg("/C").arg(cli_path);
+            return cmd;
+        }
+    }
+    Command::new(cli_path)
+}
+
+impl SubprocessTransport {
     /// Check Claude CLI version
     async fn check_claude_version(&self) -> Result<()> {
         // Skip if option is set OR environment variable is set
@@ -574,7 +599,7 @@ impl SubprocessTransport {
             return Ok(());
         }
 
-        let output = Command::new(&self.cli_path)
+        let output = make_command(&self.cli_path)
             .arg("--version")
             .output()
             .await
@@ -639,7 +664,7 @@ impl Transport for SubprocessTransport {
         let env = self.build_env();
 
         // Build command
-        let mut cmd = Command::new(&self.cli_path);
+        let mut cmd = make_command(&self.cli_path);
         cmd.args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
