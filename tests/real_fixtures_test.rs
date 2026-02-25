@@ -549,11 +549,18 @@ fn test_malformed_json_error() {
 
 #[test]
 fn test_unknown_type_handling() {
-    // The Message enum should handle unknown types via serde
+    // The Message enum should gracefully handle unknown types via serde(other)
     let unknown = r#"{"type": "unknown_type", "data": {}}"#;
     let result = serde_json::from_str::<Message>(unknown);
-    // Should error on unknown type
-    assert!(result.is_err());
+    // Should deserialize as Message::Unknown instead of erroring
+    assert!(result.is_ok());
+    assert!(matches!(result.unwrap(), Message::Unknown));
+
+    // rate_limit_event should deserialize as RateLimitEvent
+    let rate_limit = r#"{"type": "rate_limit_event", "retry_after": 5}"#;
+    let result = serde_json::from_str::<Message>(rate_limit);
+    assert!(result.is_ok());
+    assert!(matches!(result.unwrap(), Message::RateLimitEvent(_)));
 }
 
 // ============================================================================

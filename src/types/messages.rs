@@ -48,6 +48,12 @@ pub enum Message {
     /// Control cancel request (ignore this - it's internal control protocol)
     #[serde(rename = "control_cancel_request")]
     ControlCancelRequest(serde_json::Value),
+    /// Rate limit event from the API
+    #[serde(rename = "rate_limit_event")]
+    RateLimitEvent(serde_json::Value),
+    /// Unknown message type (forward-compatibility catch-all)
+    #[serde(other)]
+    Unknown,
 }
 
 /// User message
