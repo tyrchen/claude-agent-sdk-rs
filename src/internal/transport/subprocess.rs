@@ -806,6 +806,7 @@ impl Transport for SubprocessTransport {
 
                             match serde_json::from_str::<serde_json::Value>(trimmed) {
                                 Ok(json) => {
+                                    buffer_size = 0;  // Reset after successful parse
                                     yield Ok(json);
                                 }
                                 Err(e) => {
