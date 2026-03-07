@@ -560,6 +560,25 @@ impl ClaudeClient {
 
             // No mutex needed - flume receiver is lock-free
             while let Ok(json) = rx.recv_async().await {
+                // Check for sentinel messages before parsing
+                // These are sent by the background task when it exits
+                if let Some(msg_type) = json.get("type").and_then(|v| v.as_str()) {
+                    if msg_type == "end" {
+                        // End sentinel - stream is done
+                        break;
+                    }
+                    if msg_type == "error" {
+                        // Error sentinel - yield error and end stream
+                        let error_msg = json.get("error")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("Unknown error");
+                        yield Err(ClaudeError::Transport(format!(
+                            "Background reader task failed: {}", error_msg
+                        )));
+                        break;
+                    }
+                }
+
                 match MessageParser::parse(json) {
                     Ok(msg) => yield Ok(msg),
                     Err(e) => yield Err(e),
