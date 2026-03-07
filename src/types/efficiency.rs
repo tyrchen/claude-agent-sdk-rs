@@ -6,6 +6,7 @@
 //! - Providing efficiency feedback with specific warnings when execution stops
 
 use futures::future::BoxFuture;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -159,7 +160,7 @@ impl ExecutionMetrics {
 }
 
 /// Summary of execution metrics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsSummary {
     pub total_tool_calls: u32,
     pub total_edits: u32,
