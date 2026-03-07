@@ -65,7 +65,8 @@ pub struct QueryFull {
     request_counter: Arc<AtomicU64>,
     /// Pending control request responses - concurrent access via DashMap
     pending_responses: Arc<DashMap<String, oneshot::Sender<serde_json::Value>>>,
-    message_tx: flume::Sender<serde_json::Value>,
+    /// Message sender - Option so start() can take ownership via .take()
+    message_tx: Option<flume::Sender<serde_json::Value>>,
     /// Message receiver - cloneable without mutex thanks to flume
     pub(crate) message_rx: flume::Receiver<serde_json::Value>,
     /// Initialization result - set once during initialize(), read many times
@@ -84,7 +85,7 @@ impl QueryFull {
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(DashMap::new()),
-            message_tx,
+            message_tx: Some(message_tx),
             message_rx,
             initialization_result: OnceLock::new(),
         }
@@ -102,7 +103,7 @@ impl QueryFull {
             next_callback_id: Arc::new(AtomicU64::new(0)),
             request_counter: Arc::new(AtomicU64::new(0)),
             pending_responses: Arc::new(DashMap::new()),
-            message_tx,
+            message_tx: Some(message_tx),
             message_rx,
             initialization_result: OnceLock::new(),
         }
@@ -175,13 +176,17 @@ impl QueryFull {
     ///
     /// Returns a receiver that signals when the background task completes.
     /// The caller should store this and await it during disconnect.
-    pub async fn start(&self) -> Result<oneshot::Receiver<()>> {
+    pub async fn start(&mut self) -> Result<oneshot::Receiver<()>> {
         let transport = Arc::clone(&self.transport);
         let transport_for_hooks = Arc::clone(&self.transport);
         let hook_callbacks = Arc::clone(&self.hook_callbacks);
         let sdk_mcp_servers = Arc::clone(&self.sdk_mcp_servers);
         let pending_responses = Arc::clone(&self.pending_responses);
-        let message_tx = self.message_tx.clone();
+        // Take ownership of message_tx
+        let message_tx = self
+            .message_tx
+            .take()
+            .expect("start() must only be called once");
 
         // Create a channel to signal when background task is ready
         let (ready_tx, ready_rx) = oneshot::channel();
@@ -195,6 +200,8 @@ impl QueryFull {
 
             // Signal that we're ready to receive messages
             let _ = ready_tx.send(());
+
+            let mut stream_error: Option<String> = None;
 
             while let Some(result) = stream.next().await {
                 match result {
@@ -244,9 +251,28 @@ impl QueryFull {
                             }
                         }
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        // Store error for sentinel message
+                        stream_error = Some(e.to_string());
+                        break;
+                    }
                 }
             }
+
+            // Signal pending control requests on error
+            if stream_error.is_some() {
+                // Unblock all pending control requests by removing them
+                // (the oneshot channels will error when dropped)
+                pending_responses.clear();
+            }
+
+            // Send error sentinel if there was an error
+            if let Some(ref error) = stream_error {
+                let _ = message_tx.send(json!({"type": "error", "error": error}));
+            }
+
+            // Always send end sentinel
+            let _ = message_tx.send(json!({"type": "end"}));
 
             // Signal that background task has completed
             let _ = shutdown_tx.send(());
