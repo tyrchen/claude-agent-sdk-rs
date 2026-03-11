@@ -673,7 +673,7 @@ impl Transport for SubprocessTransport {
         cmd.args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(if self.options.stderr_callback.is_some() { Stdio::piped() } else { Stdio::null() })
             .envs(&env);
 
         if let Some(ref cwd) = self.cwd {
