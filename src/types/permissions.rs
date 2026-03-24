@@ -60,7 +60,7 @@ impl Default for PermissionResultDeny {
 }
 
 /// Permission update to apply
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PermissionUpdate {
     /// Type of update
     #[serde(rename = "type")]
@@ -101,7 +101,7 @@ pub enum PermissionUpdateType {
 }
 
 /// Permission rule value
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PermissionRuleValue {
     /// Tool name for this rule
     #[serde(rename = "toolName")]

@@ -1,10 +1,11 @@
 //! Error types for the Claude Agent SDK
 
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 
 /// Main error type for the Claude Agent SDK
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
 pub enum ClaudeError {
     /// CLI connection error
     #[error("CLI connection error: {0}")]
@@ -42,17 +43,13 @@ pub enum ClaudeError {
     #[error("Image validation error: {0}")]
     ImageValidation(#[from] ImageValidationError),
 
-    /// IO error
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    /// Other errors
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    /// Other errors (stores error message as string for serializability)
+    #[error("{0}")]
+    Other(String),
 }
 
 /// Error when Claude Code CLI cannot be found
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
 #[error("CLI not found: {message}")]
 pub struct CliNotFoundError {
     /// Error message
@@ -72,7 +69,7 @@ impl CliNotFoundError {
 }
 
 /// Error when connecting to Claude Code CLI
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
 #[error("Connection error: {message}")]
 pub struct ConnectionError {
     /// Error message
@@ -89,7 +86,7 @@ impl ConnectionError {
 }
 
 /// Error when the CLI process fails
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
 #[error("Process error (exit code {exit_code:?}): {message}")]
 pub struct ProcessError {
     /// Error message
@@ -112,7 +109,7 @@ impl ProcessError {
 }
 
 /// Error when JSON decoding fails
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
 #[error("JSON decode error: {message}")]
 pub struct JsonDecodeError {
     /// Error message
@@ -132,7 +129,7 @@ impl JsonDecodeError {
 }
 
 /// Error when message parsing fails
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
 #[error("Message parse error: {message}")]
 pub struct MessageParseError {
     /// Error message
@@ -152,7 +149,7 @@ impl MessageParseError {
 }
 
 /// Image validation error
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error, Serialize, Deserialize)]
 #[error("Image validation error: {message}")]
 pub struct ImageValidationError {
     /// Error message

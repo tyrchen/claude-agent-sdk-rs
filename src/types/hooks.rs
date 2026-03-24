@@ -172,7 +172,7 @@ pub struct PreCompactHookInput {
 }
 
 /// Hook context passed to callbacks
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HookContext {
     /// Abort signal (future feature)
     pub signal: Option<()>,

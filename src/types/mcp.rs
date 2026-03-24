@@ -263,7 +263,11 @@ macro_rules! tool {
                 use futures::FutureExt;
                 let f = &self.0;
                 let fut = f(args);
-                async move { fut.await.map_err(|e| e.into()) }.boxed()
+                async move {
+                    fut.await
+                        .map_err(|e| $crate::errors::ClaudeError::Other(e.to_string()))
+                }
+                .boxed()
             }
         }
 
