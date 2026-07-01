@@ -680,6 +680,18 @@ impl Transport for SubprocessTransport {
             cmd.current_dir(cwd);
         }
 
+        // Set uid/gid of the spawned process (Unix only).
+        // `tokio::process::Command` provides inherent `uid`/`gid` methods on Unix.
+        #[cfg(unix)]
+        {
+            if let Some(uid) = self.options.uid {
+                cmd.uid(uid);
+            }
+            if let Some(gid) = self.options.gid {
+                cmd.gid(gid);
+            }
+        }
+
         // Spawn process
         let mut child = cmd.spawn().map_err(|e| {
             ClaudeError::Process(ProcessError::new(

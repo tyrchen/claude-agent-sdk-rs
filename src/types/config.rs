@@ -77,6 +77,20 @@ pub struct ClaudeAgentOptions {
     /// Environment variables
     #[builder(default)]
     pub env: HashMap<String, String>,
+    /// User ID (uid) to run the spawned Claude CLI process as (Unix only).
+    ///
+    /// When set, the SDK calls `Command::uid()` before spawning. Requires the
+    /// host process to have sufficient privileges (typically root).
+    #[cfg(unix)]
+    #[builder(default, setter(strip_option))]
+    pub uid: Option<u32>,
+    /// Group ID (gid) to run the spawned Claude CLI process as (Unix only).
+    ///
+    /// When set, the SDK calls `Command::gid()` before spawning. Requires the
+    /// host process to have sufficient privileges (typically root).
+    #[cfg(unix)]
+    #[builder(default, setter(strip_option))]
+    pub gid: Option<u32>,
     /// Extra CLI arguments
     #[builder(default)]
     pub extra_args: HashMap<String, Option<String>>,
@@ -590,6 +604,22 @@ mod tests {
             }
             _ => panic!("Expected Some(Tools::List)"),
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_uid_gid_in_options_builder() {
+        let options = ClaudeAgentOptions::builder().uid(1000).gid(1000).build();
+        assert_eq!(options.uid, Some(1000));
+        assert_eq!(options.gid, Some(1000));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_uid_gid_default_none() {
+        let options = ClaudeAgentOptions::default();
+        assert_eq!(options.uid, None);
+        assert_eq!(options.gid, None);
     }
 
     #[test]
