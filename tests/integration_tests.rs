@@ -438,6 +438,7 @@ fn test_message_deserialization() {
 
 /// Test new configuration options: fallback_model, max_budget_usd, max_thinking_tokens
 #[test]
+#[allow(deprecated)]
 fn test_new_config_options() {
     // Test fallback_model
     let options = ClaudeAgentOptions::builder()
@@ -472,6 +473,7 @@ fn test_new_config_options() {
 
 /// Test that new options work with default values
 #[test]
+#[allow(deprecated)]
 fn test_new_options_defaults() {
     let options = ClaudeAgentOptions::default();
     assert_eq!(options.fallback_model, None);
@@ -550,6 +552,7 @@ async fn test_max_budget_integration() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[ignore] // Requires Claude CLI
+#[allow(deprecated)]
 async fn test_max_thinking_tokens_integration() -> anyhow::Result<()> {
     // API requires minimum of 1024 thinking tokens
     let options = ClaudeAgentOptions::builder()

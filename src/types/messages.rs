@@ -27,27 +27,156 @@ pub enum AssistantMessageError {
 }
 
 /// Main message enum containing all message types from CLI
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
+///
+/// Deserialization routes `system` messages by their `subtype`: task
+/// lifecycle events (`task_started`, `task_progress`, `task_notification`,
+/// `task_updated`) and hook events (`hook_started`, `hook_response`) become
+/// their own typed variants; everything else stays [`Message::System`].
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Message {
     /// Assistant message
-    #[serde(rename = "assistant")]
     Assistant(AssistantMessage),
     /// System message
-    #[serde(rename = "system")]
     System(SystemMessage),
     /// Result message
-    #[serde(rename = "result")]
     Result(ResultMessage),
     /// Stream event
-    #[serde(rename = "stream_event")]
     StreamEvent(StreamEvent),
     /// User message (rarely used in stream output)
-    #[serde(rename = "user")]
     User(UserMessage),
     /// Control cancel request (ignore this - it's internal control protocol)
-    #[serde(rename = "control_cancel_request")]
     ControlCancelRequest(serde_json::Value),
+    /// Rate limit state transition event
+    RateLimit(RateLimitEvent),
+    /// Conversation reset (`/clear`-style mid-session reset)
+    ConversationReset(ConversationResetMessage),
+    /// Background task started
+    TaskStarted(TaskStartedMessage),
+    /// Background task progress
+    TaskProgress(TaskProgressMessage),
+    /// Background task completed/failed/stopped
+    TaskNotification(TaskNotificationMessage),
+    /// Background task state change
+    TaskUpdated(TaskUpdatedMessage),
+    /// Hook lifecycle event (requires `include_hook_events`)
+    HookEvent(HookEventMessage),
+}
+
+impl Message {
+    /// Wire `type` tag used when serializing this message
+    fn wire_type(&self) -> &'static str {
+        match self {
+            Message::Assistant(_) => "assistant",
+            Message::System(_)
+            | Message::TaskStarted(_)
+            | Message::TaskProgress(_)
+            | Message::TaskNotification(_)
+            | Message::TaskUpdated(_)
+            | Message::HookEvent(_) => "system",
+            Message::Result(_) => "result",
+            Message::StreamEvent(_) => "stream_event",
+            Message::User(_) => "user",
+            Message::ControlCancelRequest(_) => "control_cancel_request",
+            Message::RateLimit(_) => "rate_limit_event",
+            Message::ConversationReset(_) => "conversation_reset",
+        }
+    }
+}
+
+impl Serialize for Message {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        fn tagged<T: Serialize>(
+            tag: &str,
+            inner: &T,
+        ) -> Result<serde_json::Value, serde_json::Error> {
+            let mut value = serde_json::to_value(inner)?;
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert(
+                    "type".to_string(),
+                    serde_json::Value::String(tag.to_string()),
+                );
+            }
+            Ok(value)
+        }
+
+        let tag = self.wire_type();
+        let value = match self {
+            Message::Assistant(m) => tagged(tag, m),
+            Message::System(m) => tagged(tag, m),
+            Message::Result(m) => tagged(tag, m),
+            Message::StreamEvent(m) => tagged(tag, m),
+            Message::User(m) => tagged(tag, m),
+            Message::ControlCancelRequest(m) => tagged(tag, m),
+            Message::RateLimit(m) => tagged(tag, m),
+            Message::ConversationReset(m) => tagged(tag, m),
+            Message::TaskStarted(m) => tagged(tag, m),
+            Message::TaskProgress(m) => tagged(tag, m),
+            Message::TaskNotification(m) => tagged(tag, m),
+            Message::TaskUpdated(m) => tagged(tag, m),
+            Message::HookEvent(m) => tagged(tag, m),
+        }
+        .map_err(serde::ser::Error::custom)?;
+        value.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Message {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error as DeError;
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        fn parse_as<T, E>(v: serde_json::Value) -> Result<T, E>
+        where
+            T: serde::de::DeserializeOwned,
+            E: serde::de::Error,
+        {
+            serde_json::from_value(v).map_err(|e: serde_json::Error| E::custom(e.to_string()))
+        }
+
+        match msg_type {
+            "assistant" => parse_as(value).map(Message::Assistant),
+            "system" => {
+                // Route typed system subtypes to their own variants
+                let subtype = value.get("subtype").and_then(|v| v.as_str());
+                match subtype {
+                    Some("task_started") => parse_as(value).map(Message::TaskStarted),
+                    Some("task_progress") => parse_as(value).map(Message::TaskProgress),
+                    Some("task_notification") => parse_as(value).map(Message::TaskNotification),
+                    Some("task_updated") => parse_as(value).map(Message::TaskUpdated),
+                    Some("hook_started") | Some("hook_response") => {
+                        parse_as(value).map(Message::HookEvent)
+                    }
+                    _ => parse_as(value).map(Message::System),
+                }
+            }
+            "result" => parse_as(value).map(Message::Result),
+            "stream_event" => parse_as(value).map(Message::StreamEvent),
+            "user" => parse_as(value).map(Message::User),
+            "control_cancel_request" => parse_as(value).map(Message::ControlCancelRequest),
+            "rate_limit_event" => parse_as(value).map(Message::RateLimit),
+            "conversation_reset" => parse_as(value).map(Message::ConversationReset),
+            other => Err(DeError::unknown_variant(
+                other,
+                &[
+                    "assistant",
+                    "system",
+                    "result",
+                    "stream_event",
+                    "user",
+                    "control_cancel_request",
+                    "rate_limit_event",
+                    "conversation_reset",
+                ],
+            )),
+        }
+    }
 }
 
 /// User message
@@ -197,6 +326,343 @@ pub struct ResultMessage {
     /// Structured output (when output_format is specified)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub structured_output: Option<serde_json::Value>,
+    /// Stop reason for the turn
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_reason: Option<String>,
+    /// Per-model usage statistics
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_usage: Option<std::collections::HashMap<String, serde_json::Value>>,
+    /// Permission denials recorded during the turn
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permission_denials: Option<Vec<serde_json::Value>>,
+    /// Error messages (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<String>>,
+    /// Message UUID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uuid: Option<String>,
+    /// Why the query loop terminated (e.g. "completed", "max_turns",
+    /// "aborted_streaming"). `None` when the CLI did not report one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminal_reason: Option<String>,
+    /// HTTP status code (e.g. 429, 500, 529) of the failing API call when
+    /// `is_error` is true. Emitted by the CLI since v2.1.110.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_error_status: Option<i32>,
+    /// Origin of the user message that triggered this turn
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<MessageOrigin>,
+}
+
+/// Origin of the user message that triggered a turn.
+///
+/// Lets a streaming-input consumer distinguish the result of its own prompt
+/// from results of injected turns such as background-task notifications.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageOrigin {
+    /// Discriminator: "human", "channel", "peer", "task-notification",
+    /// "coordinator", "unclassified", "observer", "auto-continuation",
+    /// "observer-activity". Newer CLIs may emit unlisted kinds.
+    pub kind: String,
+    /// kind == "channel": name of the MCP server the message arrived on
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
+    /// kind == "peer" / "observer": sender address (sender-asserted)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "from")]
+    pub from_: Option<String>,
+    /// kind == "peer": sender display name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// kind == "task-notification": "scheduled-trigger" or "peer-send-message"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subkind: Option<String>,
+    /// Additional origin fields
+    #[serde(flatten)]
+    pub extra: serde_json::Value,
+}
+
+/// Rate limit status values
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RateLimitStatus {
+    /// Within the limit
+    Allowed,
+    /// Approaching the limit
+    AllowedWarning,
+    /// The limit has been hit
+    Rejected,
+}
+
+/// Rate limit window types
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RateLimitType {
+    /// Five-hour window
+    FiveHour,
+    /// Seven-day window
+    SevenDay,
+    /// Seven-day window (Opus)
+    SevenDayOpus,
+    /// Seven-day window (Sonnet)
+    SevenDaySonnet,
+    /// Overage / pay-as-you-go window
+    Overage,
+    /// Unrecognized window type (forward compatibility)
+    #[serde(other)]
+    Other,
+}
+
+/// Rate limit status emitted by the CLI when rate limit state changes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitInfo {
+    /// Current rate limit status
+    pub status: RateLimitStatus,
+    /// Unix timestamp when the rate limit window resets
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resets_at: Option<i64>,
+    /// Which rate limit window applies
+    #[serde(skip_serializing_if = "Option::is_none", rename = "rateLimitType")]
+    pub rate_limit_type: Option<RateLimitType>,
+    /// Fraction of the rate limit consumed (0.0 - 1.0)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub utilization: Option<f64>,
+    /// Status of overage/pay-as-you-go usage if applicable
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overage_status: Option<RateLimitStatus>,
+    /// Unix timestamp when overage window resets
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overage_resets_at: Option<i64>,
+    /// Why overage is unavailable if status is rejected
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overage_disabled_reason: Option<String>,
+    /// Full raw payload from the CLI, including unmodeled fields
+    #[serde(flatten)]
+    pub raw: serde_json::Value,
+}
+
+/// Rate limit event emitted when rate limit info changes.
+///
+/// Use this to warn users before they hit a hard limit, or to gracefully
+/// back off when `status == "rejected"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitEvent {
+    /// The rate limit status
+    pub rate_limit_info: RateLimitInfo,
+    /// Event UUID
+    pub uuid: String,
+    /// Session ID
+    pub session_id: String,
+}
+
+/// Emitted when the session's conversation is replaced without ending the
+/// connection — e.g. after `/clear`.
+///
+/// A reset zeroes the running totals reported on subsequent [`ResultMessage`]s
+/// (e.g. `total_cost_usd`); snapshot any accumulated totals when this arrives.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationResetMessage {
+    /// Opaque identifier for the fresh conversation (key a new empty
+    /// transcript on this; it is *not* the session_id of later messages)
+    pub new_conversation_id: String,
+    /// Message UUID
+    pub uuid: String,
+    /// ID of the session that was reset
+    pub session_id: String,
+}
+
+/// Usage statistics reported in task progress/notification messages
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskUsage {
+    /// Total tokens used by the task
+    pub total_tokens: u64,
+    /// Number of tool uses
+    pub tool_uses: u64,
+    /// Task duration in milliseconds
+    pub duration_ms: u64,
+}
+
+/// Terminal task statuses: the task has finished and should be cleared from
+/// any active-task tracking. Spans both lifecycle vocabularies:
+/// `task_notification` reports `stopped` (the CLI's mapped form of a killed
+/// task) while `task_updated` reports the raw `killed`.
+pub const TERMINAL_TASK_STATUSES: &[&str] = &["completed", "failed", "stopped", "killed"];
+
+/// Returns true if the given task status is terminal
+pub fn is_terminal_task_status(status: &str) -> bool {
+    TERMINAL_TASK_STATUSES.contains(&status)
+}
+
+/// System message emitted when a background task starts
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskStartedMessage {
+    /// Message subtype ("task_started")
+    pub subtype: String,
+    /// Task ID
+    pub task_id: String,
+    /// Task description
+    pub description: String,
+    /// Message UUID
+    pub uuid: String,
+    /// Session ID
+    pub session_id: String,
+    /// Tool use ID that spawned the task, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
+    /// Task type, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_type: Option<String>,
+    /// Full raw payload
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}
+
+/// System message emitted while a background task is in progress
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskProgressMessage {
+    /// Message subtype ("task_progress")
+    pub subtype: String,
+    /// Task ID
+    pub task_id: String,
+    /// Task description
+    pub description: String,
+    /// Current usage statistics
+    pub usage: TaskUsage,
+    /// Message UUID
+    pub uuid: String,
+    /// Session ID
+    pub session_id: String,
+    /// Tool use ID that spawned the task, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
+    /// Name of the last tool used, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_tool_name: Option<String>,
+    /// Full raw payload
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}
+
+/// System message emitted when a background task completes, fails, or is stopped.
+///
+/// Note: not every terminal task emits this message. Background tasks may
+/// instead report completion only via a [`TaskUpdatedMessage`] whose
+/// `patch.status` is terminal. Clear tracked task IDs on a terminal status
+/// from *either* message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskNotificationMessage {
+    /// Message subtype ("task_notification")
+    pub subtype: String,
+    /// Task ID
+    pub task_id: String,
+    /// Terminal status: "completed", "failed", or "stopped"
+    pub status: String,
+    /// Path to the file holding the task's output
+    pub output_file: String,
+    /// Summary of the task result
+    pub summary: String,
+    /// Message UUID
+    pub uuid: String,
+    /// Session ID
+    pub session_id: String,
+    /// Tool use ID that spawned the task, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
+    /// Final usage statistics, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<TaskUsage>,
+    /// Full raw payload
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}
+
+/// System message emitted when a background task's state changes.
+///
+/// `patch` carries the changed fields (e.g. `status`, `end_time`). A
+/// background task's terminal state can arrive *only* as this message with no
+/// accompanying [`TaskNotificationMessage`] — e.g. a task stopped via
+/// `stop_task` reports `status="killed"` here.
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskUpdatedMessage {
+    /// Message subtype ("task_updated")
+    pub subtype: String,
+    /// Task ID
+    pub task_id: String,
+    /// Changed fields
+    pub patch: serde_json::Value,
+    /// Terminal-ness derived from `patch.status`; `None` when the patch
+    /// carries no status
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Session ID, if present
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// Message UUID, if present
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uuid: Option<String>,
+    /// Full raw payload
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+}
+
+impl<'de> serde::Deserialize<'de> for TaskUpdatedMessage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct Raw {
+            subtype: String,
+            #[serde(default)]
+            task_id: String,
+            #[serde(default)]
+            patch: serde_json::Value,
+            #[serde(default)]
+            session_id: Option<String>,
+            #[serde(default)]
+            uuid: Option<String>,
+            #[serde(flatten)]
+            data: serde_json::Value,
+        }
+        let raw = Raw::deserialize(deserializer)?;
+        // Terminal-ness is derived from patch.status, mirroring the Python SDK
+        let status = raw
+            .patch
+            .get("status")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        Ok(TaskUpdatedMessage {
+            subtype: raw.subtype,
+            task_id: raw.task_id,
+            patch: raw.patch,
+            status,
+            session_id: raw.session_id,
+            uuid: raw.uuid,
+            data: raw.data,
+        })
+    }
+}
+
+/// Hook lifecycle event emitted by the CLI when `include_hook_events` is enabled.
+///
+/// Arrives on the wire as `{"type": "system", "subtype": "hook_started" |
+/// "hook_response", ...}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HookEventMessage {
+    /// Lifecycle phase: "hook_started" or "hook_response"
+    pub subtype: String,
+    /// Name of the hook event (e.g. "PreToolUse", "PostToolUse", "Stop").
+    /// The CLI may send this as `hook_event`, `hook_name`, or `hook_event_name`.
+    #[serde(default, alias = "hook_event", alias = "hook_name")]
+    pub hook_event_name: String,
+    /// Full raw event payload
+    #[serde(flatten)]
+    pub data: serde_json::Value,
+    /// Session ID the event belongs to, if present
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// Unique ID of the event, if present
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uuid: Option<String>,
 }
 
 /// Stream event message
@@ -769,5 +1235,216 @@ mod tests {
         assert!(block.is_err());
         let err = block.unwrap_err().to_string();
         assert!(err.contains("exceeds maximum size"));
+    }
+}
+
+#[cfg(test)]
+mod new_message_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_parse_rate_limit_event() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "rate_limit_event",
+            "rate_limit_info": {
+                "status": "allowed_warning",
+                "resets_at": 1234567890,
+                "utilization": 0.85
+            },
+            "uuid": "u1",
+            "session_id": "s1"
+        }))
+        .unwrap();
+        match msg {
+            Message::RateLimit(e) => {
+                assert_eq!(e.uuid, "u1");
+                assert_eq!(e.rate_limit_info.status, RateLimitStatus::AllowedWarning);
+                assert_eq!(e.rate_limit_info.utilization, Some(0.85));
+            }
+            other => panic!("expected RateLimit, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_conversation_reset() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "conversation_reset",
+            "new_conversation_id": "conv-2",
+            "uuid": "u2",
+            "session_id": "s1"
+        }))
+        .unwrap();
+        match msg {
+            Message::ConversationReset(m) => {
+                assert_eq!(m.new_conversation_id, "conv-2");
+                assert_eq!(m.session_id, "s1");
+            }
+            other => panic!("expected ConversationReset, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_task_started() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "system",
+            "subtype": "task_started",
+            "task_id": "t1",
+            "description": "build",
+            "uuid": "u3",
+            "session_id": "s1"
+        }))
+        .unwrap();
+        match msg {
+            Message::TaskStarted(m) => {
+                assert_eq!(m.task_id, "t1");
+                assert_eq!(m.description, "build");
+            }
+            other => panic!("expected TaskStarted, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_task_progress() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "system",
+            "subtype": "task_progress",
+            "task_id": "t1",
+            "description": "build",
+            "usage": {"total_tokens": 100, "tool_uses": 3, "duration_ms": 500},
+            "uuid": "u4",
+            "session_id": "s1"
+        }))
+        .unwrap();
+        match msg {
+            Message::TaskProgress(m) => {
+                assert_eq!(m.usage.total_tokens, 100);
+                assert_eq!(m.usage.tool_uses, 3);
+            }
+            other => panic!("expected TaskProgress, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_task_notification() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "system",
+            "subtype": "task_notification",
+            "task_id": "t1",
+            "status": "completed",
+            "output_file": "/tmp/out",
+            "summary": "done",
+            "uuid": "u5",
+            "session_id": "s1"
+        }))
+        .unwrap();
+        match msg {
+            Message::TaskNotification(m) => {
+                assert_eq!(m.status, "completed");
+                assert!(is_terminal_task_status(&m.status));
+            }
+            other => panic!("expected TaskNotification, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_task_updated_killed_is_terminal() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "system",
+            "subtype": "task_updated",
+            "task_id": "t1",
+            "patch": {"status": "killed", "end_time": "2026-10-04T00:00:00Z"}
+        }))
+        .unwrap();
+        match msg {
+            Message::TaskUpdated(m) => {
+                assert_eq!(m.status.as_deref(), Some("killed"));
+                assert!(is_terminal_task_status(m.status.as_deref().unwrap()));
+            }
+            other => panic!("expected TaskUpdated, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_hook_event_message() {
+        for subtype in ["hook_started", "hook_response"] {
+            let msg: Message = serde_json::from_value(json!({
+                "type": "system",
+                "subtype": subtype,
+                "hook_event": "PreToolUse",
+                "uuid": "u6",
+                "session_id": "s1"
+            }))
+            .unwrap();
+            match msg {
+                Message::HookEvent(m) => {
+                    assert_eq!(m.hook_event_name, "PreToolUse");
+                    assert_eq!(m.subtype, subtype);
+                }
+                other => panic!("expected HookEvent, got {:?}", other),
+            }
+        }
+    }
+
+    #[test]
+    fn test_plain_system_message_still_parses_as_system() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "system",
+            "subtype": "init",
+            "session_id": "s1"
+        }))
+        .unwrap();
+        assert!(matches!(msg, Message::System(_)));
+    }
+
+    #[test]
+    fn test_result_message_new_fields() {
+        let msg: Message = serde_json::from_value(json!({
+            "type": "result",
+            "subtype": "success",
+            "duration_ms": 100,
+            "duration_api_ms": 90,
+            "is_error": false,
+            "num_turns": 2,
+            "session_id": "s1",
+            "stop_reason": "end_turn",
+            "terminal_reason": "completed",
+            "uuid": "u7",
+            "errors": ["e1"],
+            "origin": {"kind": "human"}
+        }))
+        .unwrap();
+        match msg {
+            Message::Result(r) => {
+                assert_eq!(r.stop_reason.as_deref(), Some("end_turn"));
+                assert_eq!(r.terminal_reason.as_deref(), Some("completed"));
+                assert_eq!(r.uuid.as_deref(), Some("u7"));
+                assert_eq!(r.errors.as_deref(), Some(&["e1".to_string()][..]));
+                assert_eq!(r.origin.as_ref().unwrap().kind, "human");
+            }
+            other => panic!("expected Result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_message_serialization_round_trip() {
+        let msg = Message::RateLimit(RateLimitEvent {
+            rate_limit_info: RateLimitInfo {
+                status: RateLimitStatus::Rejected,
+                resets_at: None,
+                rate_limit_type: None,
+                utilization: None,
+                overage_status: None,
+                overage_resets_at: None,
+                overage_disabled_reason: None,
+                raw: serde_json::Value::Null,
+            },
+            uuid: "u8".to_string(),
+            session_id: "s1".to_string(),
+        });
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], serde_json::json!("rate_limit_event"));
+        let back: Message = serde_json::from_value(json).unwrap();
+        assert!(matches!(back, Message::RateLimit(_)));
     }
 }

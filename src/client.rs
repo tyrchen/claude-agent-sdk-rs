@@ -147,10 +147,14 @@ impl ClaudeClient {
         match event {
             HookEvent::PreToolUse => "PreToolUse",
             HookEvent::PostToolUse => "PostToolUse",
+            HookEvent::PostToolUseFailure => "PostToolUseFailure",
             HookEvent::UserPromptSubmit => "UserPromptSubmit",
             HookEvent::Stop => "Stop",
             HookEvent::SubagentStop => "SubagentStop",
             HookEvent::PreCompact => "PreCompact",
+            HookEvent::Notification => "Notification",
+            HookEvent::SubagentStart => "SubagentStart",
+            HookEvent::PermissionRequest => "PermissionRequest",
         }
         .to_string()
     }
@@ -172,7 +176,7 @@ impl ClaudeClient {
 
         // Initialize with hooks if requested
         if initialize {
-            query.initialize(hooks).await?;
+            query.initialize(hooks, &self.options).await?;
         }
 
         self.query = Some(Arc::new(query));
@@ -342,6 +346,18 @@ impl ClaudeClient {
         self.query_with_session(prompt, "default").await
     }
 
+    /// Stamp an outgoing user message with `client_composed` when
+    /// `verbatim_prompts` is enabled, so the CLI delivers it exactly as
+    /// written (no `@path` expansion, no slash-command dispatch).
+    fn stamp_verbatim(&self, mut message: serde_json::Value) -> serde_json::Value {
+        if self.options.verbatim_prompts
+            && let Some(obj) = message.as_object_mut()
+        {
+            obj.insert("client_composed".to_string(), serde_json::Value::Bool(true));
+        }
+        message
+    }
+
     /// Send a query to Claude with a specific session ID
     ///
     /// This sends a new user prompt to Claude. Different session IDs maintain
@@ -383,14 +399,14 @@ impl ClaudeClient {
         let session_id_str = session_id.into();
 
         // Format as JSON message for stream-json input format
-        let user_message = serde_json::json!({
+        let user_message = self.stamp_verbatim(serde_json::json!({
             "type": "user",
             "message": {
                 "role": "user",
                 "content": prompt_str
             },
             "session_id": session_id_str
-        });
+        }));
 
         let message_str = serde_json::to_string(&user_message).map_err(|e| {
             ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
@@ -493,14 +509,14 @@ impl ClaudeClient {
 
         // Format as JSON message for stream-json input format
         // Content is an array of content blocks, not a simple string
-        let user_message = serde_json::json!({
+        let user_message = self.stamp_verbatim(serde_json::json!({
             "type": "user",
             "message": {
                 "role": "user",
                 "content": content_blocks
             },
             "session_id": session_id_str
-        });
+        }));
 
         let message_str = serde_json::to_string(&user_message).map_err(|e| {
             ClaudeError::Transport(format!("Failed to serialize user message: {}", e))
@@ -750,6 +766,99 @@ impl ClaudeClient {
         })?;
 
         query.rewind_files(user_message_id).await
+    }
+
+    /// Get current MCP server connection status.
+    ///
+    /// This is analogous to Python's `client.get_mcp_status()`.
+    ///
+    /// Returns the list of configured MCP servers with their connection
+    /// status, server info, and tool lists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    pub async fn get_mcp_status(&self) -> Result<serde_json::Value> {
+        let query = self.query.as_ref().ok_or_else(|| {
+            ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
+        })?;
+
+        query.get_mcp_status().await
+    }
+
+    /// Get a breakdown of current context window usage by category.
+    ///
+    /// This is analogous to Python's `client.get_context_usage()`.
+    ///
+    /// Matches the data shown by the `/context` command in the CLI.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    pub async fn get_context_usage(&self) -> Result<serde_json::Value> {
+        let query = self.query.as_ref().ok_or_else(|| {
+            ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
+        })?;
+
+        query.get_context_usage().await
+    }
+
+    /// Reconnect a disconnected or failed MCP server.
+    ///
+    /// This is analogous to Python's `client.reconnect_mcp_server()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `server_name` - The name of the MCP server to reconnect
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    pub async fn reconnect_mcp_server(&self, server_name: &str) -> Result<()> {
+        let query = self.query.as_ref().ok_or_else(|| {
+            ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
+        })?;
+
+        query.reconnect_mcp_server(server_name).await
+    }
+
+    /// Enable or disable an MCP server mid-session.
+    ///
+    /// This is analogous to Python's `client.toggle_mcp_server()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `server_name` - The name of the MCP server to toggle
+    /// * `enabled` - Whether the server should be enabled
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    pub async fn toggle_mcp_server(&self, server_name: &str, enabled: bool) -> Result<()> {
+        let query = self.query.as_ref().ok_or_else(|| {
+            ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
+        })?;
+
+        query.toggle_mcp_server(server_name, enabled).await
+    }
+
+    /// Stop a running background task.
+    ///
+    /// This is analogous to Python's `client.stop_task()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `task_id` - The task ID from task notification events
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not connected or if sending fails.
+    pub async fn stop_task(&self, task_id: &str) -> Result<()> {
+        let query = self.query.as_ref().ok_or_else(|| {
+            ClaudeError::InvalidConfig("Client not connected. Call connect() first.".to_string())
+        })?;
+
+        query.stop_task(task_id).await
     }
 
     /// Get server initialization info including available commands and output styles

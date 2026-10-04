@@ -20,6 +20,7 @@
 use claude_agent_sdk_rs::{ClaudeAgentOptions, ContentBlock, Message, PermissionMode, query};
 
 #[tokio::main]
+#[allow(deprecated)]
 async fn main() -> anyhow::Result<()> {
     println!("=== Example 19: Maximum Thinking Tokens ===\n");
 
