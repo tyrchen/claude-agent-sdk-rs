@@ -57,6 +57,13 @@ pub struct ClaudeAgentOptions {
     #[builder(default, setter(strip_option))]
     pub max_budget_usd: Option<f64>,
     /// Maximum tokens for thinking blocks
+    ///
+    /// Deprecated: use [`ClaudeAgentOptions::thinking`] instead, which takes
+    /// precedence when both are set.
+    #[deprecated(
+        since = "0.7.0",
+        note = "Use `thinking` instead; it takes precedence when both are set"
+    )]
     #[builder(default, setter(strip_option))]
     pub max_thinking_tokens: Option<u32>,
     /// Tool name for permission prompts
@@ -161,6 +168,90 @@ pub struct ClaudeAgentOptions {
     /// ```
     #[builder(default, setter(strip_option))]
     pub efficiency: Option<EfficiencyConfig>,
+
+    /// Skills to enable.
+    ///
+    /// This is the single place to enable skills: the SDK automatically
+    /// configures `allowed_tools` (injecting `Skill` for [`Skills::All`] or
+    /// `Skill(name)` for each entry of [`Skills::List`]) and defaults
+    /// `setting_sources` to `["user", "project"]` when unset, so the CLI
+    /// discovers installed skills.
+    ///
+    /// Analogous to Python's `ClaudeAgentOptions.skills`.
+    #[builder(default, setter(into, strip_option))]
+    pub skills: Option<Skills>,
+
+    /// Thinking configuration.
+    ///
+    /// Supersedes the deprecated [`ClaudeAgentOptions::max_thinking_tokens`]:
+    /// when set, it takes precedence over `max_thinking_tokens`.
+    ///
+    /// Analogous to Python's `ClaudeAgentOptions.thinking`.
+    #[builder(default, setter(strip_option))]
+    pub thinking: Option<ThinkingConfig>,
+
+    /// Thinking-depth dial for adaptive thinking.
+    ///
+    /// Analogous to Python's `ClaudeAgentOptions.effort`.
+    #[builder(default, setter(strip_option))]
+    pub effort: Option<EffortLevel>,
+
+    /// Deliver prompts exactly as written.
+    ///
+    /// When true, every SDK-sent user message is stamped `client_composed`,
+    /// so the CLI performs no `@path` file expansion and no slash-command
+    /// dispatch. Enable this when prompts are assembled from untrusted
+    /// content to prevent unintended file reads or command execution.
+    ///
+    /// Requires Claude Code CLI 2.1.248+; older CLIs ignore the stamp.
+    /// Analogous to Python's `ClaudeAgentOptions.verbatim_prompts`.
+    #[builder(default = false)]
+    pub verbatim_prompts: bool,
+
+    /// Pin a specific session UUID instead of auto-generating one.
+    ///
+    /// Analogous to Python's `ClaudeAgentOptions.session_id`.
+    #[builder(default, setter(into, strip_option))]
+    pub session_id: Option<String>,
+
+    /// On resume, load the conversation only up to the transcript entry with
+    /// this UUID — branch from an earlier point (usually with `fork_session`).
+    ///
+    /// Analogous to Python's `ClaudeAgentOptions.resume_session_at`.
+    #[builder(default, setter(into, strip_option))]
+    pub resume_session_at: Option<String>,
+
+    /// With `resume_session_at`: UUID of the user prompt whose turn is being
+    /// discarded. The CLI validates the truncated range at load and refuses
+    /// otherwise.
+    ///
+    /// Analogous to Python's `ClaudeAgentOptions.resume_drops_turn`.
+    #[builder(default, setter(into, strip_option))]
+    pub resume_drops_turn: Option<String>,
+
+    /// Only use MCP servers from `mcp_servers`; ignore project/user/global
+    /// settings and plugin servers.
+    ///
+    /// Maps to the `--strict-mcp-config` CLI flag.
+    /// Analogous to Python's `ClaudeAgentOptions.strict_mcp_config`.
+    #[builder(default = false)]
+    pub strict_mcp_config: bool,
+
+    /// Ask the CLI to emit hook lifecycle events as [`crate::types::messages::HookEventMessage`]
+    /// in the message stream.
+    ///
+    /// Maps to the `--include-hook-events` CLI flag.
+    /// Analogous to Python's `ClaudeAgentOptions.include_hook_events`.
+    #[builder(default = false)]
+    pub include_hook_events: bool,
+
+    /// Ask the CLI (via the initialize request) to forward subagent
+    /// text/thinking blocks as messages. By default only tool_use/tool_result
+    /// are forwarded as progress heartbeats.
+    ///
+    /// Analogous to Python's `ClaudeAgentOptions.forward_subagent_text`.
+    #[builder(default = false)]
+    pub forward_subagent_text: bool,
 }
 
 impl Default for ClaudeAgentOptions {
@@ -202,6 +293,13 @@ pub struct SystemPromptPreset {
     /// Text to append to the preset
     #[serde(skip_serializing_if = "Option::is_none")]
     pub append: Option<String>,
+    /// Whether the session keeps the system prompt recorded on its first
+    /// request. When true, later requests (including after resume) reuse the
+    /// recorded prompt, improving prompt-caching behavior. When false, the
+    /// prompt is rebuilt on every request, useful while iterating on `append`
+    /// text. Requires Claude Code CLI 2.1.257+.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<bool>,
 }
 
 impl SystemPromptPreset {
@@ -211,6 +309,7 @@ impl SystemPromptPreset {
             type_: "preset".to_string(),
             preset: preset.into(),
             append: None,
+            snapshot: None,
         }
     }
 
@@ -220,7 +319,14 @@ impl SystemPromptPreset {
             type_: "preset".to_string(),
             preset: preset.into(),
             append: Some(append.into()),
+            snapshot: None,
         }
+    }
+
+    /// Set whether the session snapshots the system prompt on first request
+    pub fn with_snapshot(mut self, snapshot: bool) -> Self {
+        self.snapshot = Some(snapshot);
+        self
     }
 }
 
@@ -238,6 +344,10 @@ pub enum PermissionMode {
     Plan,
     /// Bypass all permissions
     BypassPermissions,
+    /// Don't prompt; deny if not pre-approved
+    DontAsk,
+    /// A model classifier approves/denies each tool call
+    Auto,
 }
 
 /// Controls which filesystem-based configuration sources the SDK loads settings from.
@@ -480,6 +590,170 @@ pub struct SandboxSettings {
     )]
     #[builder(default, setter(strip_option))]
     pub enable_weaker_nested_sandbox: Option<bool>,
+}
+
+/// Skills to enable.
+///
+/// This is the single place to enable skills. Analogous to Python's
+/// `ClaudeAgentOptions.skills` (`list[str] | Literal["all"] | None`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum Skills {
+    /// Enable every discovered skill (injects the bare `Skill` tool)
+    #[serde(rename = "all")]
+    All,
+    /// Enable the listed skills (injects `Skill(name)` for each entry)
+    List(Vec<String>),
+}
+
+impl Skills {
+    /// Validate skill names the same way the Python SDK does: names must be
+    /// non-empty, must not start with `/`, must not be `*`, and must not
+    /// contain characters that break the CLI's `--allowedTools` tokenizer
+    /// (parentheses, commas, control characters, byte-order marks).
+    pub fn validate(&self) -> Result<(), String> {
+        let Skills::List(names) = self else {
+            return Ok(());
+        };
+        for name in names {
+            if name.trim().is_empty() {
+                return Err("Skill names must be non-empty strings".to_string());
+            }
+            if name != name.trim() {
+                return Err(format!(
+                    "Invalid skill name {name:?}: leading or trailing whitespace can never match"
+                ));
+            }
+            if name == "*" {
+                return Err(
+                    "Invalid skill name '*': use Skills::All to enable every skill".to_string(),
+                );
+            }
+            if name.starts_with('/') {
+                return Err(format!(
+                    "Invalid skill name {name:?}: skill names may not start with '/'"
+                ));
+            }
+            if name
+                .chars()
+                .any(|c| c == '(' || c == ')' || c == ',' || c.is_control() || c == '\u{FEFF}')
+            {
+                return Err(format!(
+                    "Invalid skill name {name:?}: parentheses, commas, control characters, and byte-order marks are not allowed"
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl From<Vec<String>> for Skills {
+    fn from(names: Vec<String>) -> Self {
+        Skills::List(names)
+    }
+}
+
+impl From<Vec<&str>> for Skills {
+    fn from(names: Vec<&str>) -> Self {
+        Skills::List(names.into_iter().map(|s| s.to_string()).collect())
+    }
+}
+
+impl<const N: usize> From<[&str; N]> for Skills {
+    fn from(names: [&str; N]) -> Self {
+        Skills::List(names.into_iter().map(|s| s.to_string()).collect())
+    }
+}
+
+/// Thinking display style for the CLI.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ThinkingDisplay {
+    /// Show a summarized view of thinking
+    Summarized,
+    /// Omit thinking output
+    Omitted,
+}
+
+impl ThinkingDisplay {
+    /// CLI flag value
+    pub fn as_cli_value(&self) -> &'static str {
+        match self {
+            ThinkingDisplay::Summarized => "summarized",
+            ThinkingDisplay::Omitted => "omitted",
+        }
+    }
+}
+
+/// Thinking configuration.
+///
+/// Supersedes the deprecated `max_thinking_tokens` option. Analogous to
+/// Python's `ThinkingConfig` (`ThinkingConfigAdaptive | ThinkingConfigEnabled | ThinkingConfigDisabled`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ThinkingConfig {
+    /// Adaptive thinking (default where supported, Opus 4.6+)
+    Adaptive {
+        /// How to display thinking output
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display: Option<ThinkingDisplay>,
+    },
+    /// Explicit thinking budget
+    Enabled {
+        /// Maximum tokens for thinking blocks
+        budget_tokens: u32,
+        /// How to display thinking output
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display: Option<ThinkingDisplay>,
+    },
+    /// Disable thinking entirely
+    Disabled,
+}
+
+impl ThinkingConfig {
+    /// Adaptive thinking with default display
+    pub fn adaptive() -> Self {
+        ThinkingConfig::Adaptive { display: None }
+    }
+
+    /// Thinking with an explicit token budget
+    pub fn with_budget(budget_tokens: u32) -> Self {
+        ThinkingConfig::Enabled {
+            budget_tokens,
+            display: None,
+        }
+    }
+}
+
+/// Thinking-depth dial for adaptive thinking.
+///
+/// Analogous to Python's `EffortLevel` (`"low" | "medium" | "high" | "xhigh" | "max"`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum EffortLevel {
+    /// Low effort
+    Low,
+    /// Medium effort
+    Medium,
+    /// High effort (default)
+    High,
+    /// Extra-high effort (Opus 4.7)
+    XHigh,
+    /// Maximum effort
+    Max,
+}
+
+impl EffortLevel {
+    /// CLI flag value
+    pub fn as_cli_value(&self) -> &'static str {
+        match self {
+            EffortLevel::Low => "low",
+            EffortLevel::Medium => "medium",
+            EffortLevel::High => "high",
+            EffortLevel::XHigh => "xhigh",
+            EffortLevel::Max => "max",
+        }
+    }
 }
 
 #[cfg(test)]

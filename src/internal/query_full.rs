@@ -120,6 +120,7 @@ impl QueryFull {
     pub async fn initialize(
         &self,
         hooks: Option<HashMap<String, Vec<HookMatcher>>>,
+        options: &crate::types::config::ClaudeAgentOptions,
     ) -> Result<serde_json::Value> {
         // Build hooks configuration
         let mut hooks_config: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
@@ -158,10 +159,32 @@ impl QueryFull {
         }
 
         // Send initialize request
-        let request = json!({
+        let mut request = json!({
             "subtype": "initialize",
             "hooks": if hooks_config.is_empty() { json!(null) } else { json!(hooks_config) }
         });
+
+        // Ask the CLI to forward subagent text/thinking blocks as messages
+        if options.forward_subagent_text {
+            request["forwardSubagentText"] = json!(true);
+        }
+
+        // Skill allowlist for the CLI to enforce ('all' and omitted are
+        // equivalent at the wire level, so only an explicit list is sent)
+        if let Some(crate::types::config::Skills::List(names)) = &options.skills
+            && !names.is_empty()
+        {
+            request["skills"] = json!(names);
+        }
+
+        // System prompt snapshot behavior (recorded on first request)
+        let snapshot = match &options.system_prompt {
+            Some(crate::types::config::SystemPrompt::Preset(preset)) => preset.snapshot,
+            _ => None,
+        };
+        if let Some(snapshot) = snapshot {
+            request["systemPromptSnapshot"] = json!(snapshot);
+        }
 
         let response = self.send_control_request(request).await?;
 
@@ -430,6 +453,8 @@ impl QueryFull {
             crate::types::config::PermissionMode::AcceptEdits => "acceptEdits",
             crate::types::config::PermissionMode::Plan => "plan",
             crate::types::config::PermissionMode::BypassPermissions => "bypassPermissions",
+            crate::types::config::PermissionMode::DontAsk => "dontAsk",
+            crate::types::config::PermissionMode::Auto => "auto",
         };
 
         let request = json!({
@@ -466,6 +491,73 @@ impl QueryFull {
         let request = json!({
             "subtype": "rewind_files",
             "user_message_id": user_message_id
+        });
+
+        self.send_control_request(request).await?;
+        Ok(())
+    }
+
+    /// Get current MCP server connection status.
+    ///
+    /// Returns the list of configured MCP servers with their connection
+    /// status, server info, and tool lists.
+    pub async fn get_mcp_status(&self) -> Result<serde_json::Value> {
+        let request = json!({
+            "subtype": "mcp_status"
+        });
+
+        self.send_control_request(request).await
+    }
+
+    /// Get a breakdown of current context window usage by category.
+    ///
+    /// Matches the data shown by the `/context` command in the CLI.
+    pub async fn get_context_usage(&self) -> Result<serde_json::Value> {
+        let request = json!({
+            "subtype": "get_context_usage"
+        });
+
+        self.send_control_request(request).await
+    }
+
+    /// Reconnect a disconnected or failed MCP server.
+    ///
+    /// # Arguments
+    /// * `server_name` - The name of the MCP server to reconnect
+    pub async fn reconnect_mcp_server(&self, server_name: &str) -> Result<()> {
+        let request = json!({
+            "subtype": "mcp_reconnect",
+            "serverName": server_name
+        });
+
+        self.send_control_request(request).await?;
+        Ok(())
+    }
+
+    /// Enable or disable an MCP server mid-session.
+    ///
+    /// # Arguments
+    /// * `server_name` - The name of the MCP server to toggle
+    /// * `enabled` - Whether the server should be enabled
+    pub async fn toggle_mcp_server(&self, server_name: &str, enabled: bool) -> Result<()> {
+        let request = json!({
+            "subtype": "mcp_toggle",
+            "serverName": server_name,
+            "enabled": enabled
+        });
+
+        self.send_control_request(request).await?;
+        Ok(())
+    }
+
+    /// Stop a running background task.
+    ///
+    /// # Arguments
+    /// * `task_id` - The task ID from task notification events
+    pub async fn stop_task(&self, task_id: &str) -> Result<()> {
+        let request = json!({
+            "subtype": "stop_task",
+            "task_id": task_id
         });
 
         self.send_control_request(request).await?;

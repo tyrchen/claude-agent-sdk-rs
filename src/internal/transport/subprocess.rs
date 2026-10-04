@@ -255,7 +255,52 @@ impl SubprocessTransport {
     }
 
     /// Build command arguments from options
-    fn build_command(&self) -> Vec<String> {
+    /// Compute effective allowed_tools and setting_sources with skills applied.
+    ///
+    /// When `options.skills` is [`Skills::All`], injects the bare `Skill` tool;
+    /// when it is [`Skills::List`], injects `Skill(name)` for each entry. In
+    /// either case `setting_sources` defaults to `["user", "project"]` when
+    /// unset so the CLI discovers installed skills. Returns an error if any
+    /// skill name is invalid.
+    fn apply_skills_defaults(
+        &self,
+    ) -> Result<(
+        Vec<String>,
+        Option<Vec<crate::types::config::SettingSource>>,
+    )> {
+        use crate::types::config::Skills;
+        let mut allowed_tools = self.options.allowed_tools.clone();
+        let mut setting_sources = self.options.setting_sources.clone();
+
+        if let Some(ref skills) = self.options.skills {
+            skills.validate().map_err(ClaudeError::InvalidConfig)?;
+            match skills {
+                Skills::All => {
+                    if !allowed_tools.iter().any(|t| t == "Skill") {
+                        allowed_tools.push("Skill".to_string());
+                    }
+                }
+                Skills::List(names) => {
+                    for name in names {
+                        let pattern = format!("Skill({})", name);
+                        if !allowed_tools.contains(&pattern) {
+                            allowed_tools.push(pattern);
+                        }
+                    }
+                }
+            }
+            if setting_sources.is_none() {
+                setting_sources = Some(vec![
+                    crate::types::config::SettingSource::User,
+                    crate::types::config::SettingSource::Project,
+                ]);
+            }
+        }
+
+        Ok((allowed_tools, setting_sources))
+    }
+
+    fn build_command(&self) -> Result<Vec<String>> {
         let mut args = vec!["--output-format".to_string(), "stream-json".to_string()];
 
         // --verbose is REQUIRED when using --output-format=stream-json
@@ -322,15 +367,20 @@ impl SubprocessTransport {
                 crate::types::config::PermissionMode::AcceptEdits => "acceptEdits",
                 crate::types::config::PermissionMode::Plan => "plan",
                 crate::types::config::PermissionMode::BypassPermissions => "bypassPermissions",
+                crate::types::config::PermissionMode::DontAsk => "dontAsk",
+                crate::types::config::PermissionMode::Auto => "auto",
             };
             args.push("--permission-mode".to_string());
             args.push(mode_str.to_string());
         }
 
         // Add allowed tools (Python SDK uses --allowedTools with comma-separated values)
-        if !self.options.allowed_tools.is_empty() {
+        // Skills are folded in here: Skills::All injects "Skill", Skills::List
+        // injects "Skill(name)" per entry.
+        let (allowed_tools, setting_sources) = self.apply_skills_defaults()?;
+        if !allowed_tools.is_empty() {
             args.push("--allowedTools".to_string());
-            args.push(self.options.allowed_tools.join(","));
+            args.push(allowed_tools.join(","));
         }
 
         // Add disallowed tools (Python SDK uses --disallowedTools with comma-separated values)
@@ -371,10 +421,46 @@ impl SubprocessTransport {
             args.push(max_budget.to_string());
         }
 
-        // Add max thinking tokens
-        if let Some(max_thinking) = self.options.max_thinking_tokens {
+        // Add max thinking tokens (deprecated; `thinking` takes precedence)
+        #[allow(deprecated)]
+        let max_thinking_tokens = self.options.max_thinking_tokens;
+        // Resolve thinking config -> --thinking / --max-thinking-tokens.
+        // `thinking` takes precedence over the deprecated `max_thinking_tokens`.
+        if let Some(ref thinking) = self.options.thinking {
+            match thinking {
+                crate::types::config::ThinkingConfig::Adaptive { display } => {
+                    args.push("--thinking".to_string());
+                    args.push("adaptive".to_string());
+                    if let Some(d) = display {
+                        args.push("--thinking-display".to_string());
+                        args.push(d.as_cli_value().to_string());
+                    }
+                }
+                crate::types::config::ThinkingConfig::Enabled {
+                    budget_tokens,
+                    display,
+                } => {
+                    args.push("--max-thinking-tokens".to_string());
+                    args.push(budget_tokens.to_string());
+                    if let Some(d) = display {
+                        args.push("--thinking-display".to_string());
+                        args.push(d.as_cli_value().to_string());
+                    }
+                }
+                crate::types::config::ThinkingConfig::Disabled => {
+                    args.push("--thinking".to_string());
+                    args.push("disabled".to_string());
+                }
+            }
+        } else if let Some(max_thinking) = max_thinking_tokens {
             args.push("--max-thinking-tokens".to_string());
             args.push(max_thinking.to_string());
+        }
+
+        // Add effort level (thinking-depth dial for adaptive thinking)
+        if let Some(effort) = self.options.effort {
+            args.push("--effort".to_string());
+            args.push(effort.as_cli_value().to_string());
         }
 
         // Add permission prompt tool name
@@ -433,6 +519,35 @@ impl SubprocessTransport {
             args.push("--fork-session".to_string());
         }
 
+        // Pin a specific session UUID instead of auto-generating one.
+        // Equals form so a dash-leading value can never be parsed as a flag.
+        if let Some(ref session_id) = self.options.session_id {
+            args.push(format!("--session-id={}", session_id));
+        }
+
+        // Resume truncated at a transcript entry (branch from an earlier point).
+        // Equals form so the value can never be parsed as a separate flag.
+        if let Some(ref resume_at) = self.options.resume_session_at {
+            args.push(format!("--resume-session-at={}", resume_at));
+        }
+
+        // UUID of the user prompt whose turn is being discarded.
+        // `is_some` (not truthiness): an empty string is forwarded so the CLI
+        // rejects it instead of the SDK silently disarming the guard.
+        if let Some(ref drops_turn) = self.options.resume_drops_turn {
+            args.push(format!("--resume-drops-turn={}", drops_turn));
+        }
+
+        // Only use MCP servers from mcp_servers; ignore settings/plugin servers
+        if self.options.strict_mcp_config {
+            args.push("--strict-mcp-config".to_string());
+        }
+
+        // Ask the CLI to emit hook lifecycle events into the message stream
+        if self.options.include_hook_events {
+            args.push("--include-hook-events".to_string());
+        }
+
         // Add agent definitions
         if let Some(ref agents) = self.options.agents
             && !agents.is_empty()
@@ -442,8 +557,8 @@ impl SubprocessTransport {
             args.push(agents_json);
         }
 
-        // Add setting sources
-        if let Some(ref sources) = self.options.setting_sources {
+        // Add setting sources (skills may have defaulted this to ["user", "project"])
+        if let Some(ref sources) = setting_sources {
             let sources_str: Vec<&str> = sources
                 .iter()
                 .map(|s| match s {
@@ -541,7 +656,7 @@ impl SubprocessTransport {
             }
         }
 
-        args
+        Ok(args)
     }
 
     /// Build settings value, merging sandbox settings if provided.
@@ -665,7 +780,7 @@ impl Transport for SubprocessTransport {
         self.check_claude_version().await?;
 
         // Build command
-        let args = self.build_command();
+        let args = self.build_command()?;
         let env = self.build_env();
 
         // Build command (hidden console window on Windows)
@@ -882,5 +997,210 @@ impl Drop for SubprocessTransport {
         {
             let _ = process.start_kill();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::config::{
+        EffortLevel, Skills, SystemPrompt, SystemPromptPreset, ThinkingConfig,
+    };
+
+    fn transport_with(options: ClaudeAgentOptions) -> SubprocessTransport {
+        // build_command never executes the CLI, so a dummy path is fine
+        let mut options = options;
+        if options.cli_path.is_none() {
+            options.cli_path = Some(std::path::PathBuf::from("/usr/bin/claude"));
+        }
+        SubprocessTransport::new(QueryPrompt::Streaming, options)
+            .expect("transport construction should succeed")
+    }
+
+    fn args_with(options: ClaudeAgentOptions) -> Vec<String> {
+        transport_with(options)
+            .build_command()
+            .expect("build_command should succeed")
+    }
+
+    #[test]
+    fn test_skills_all_injects_skill_tool() {
+        let args = args_with(ClaudeAgentOptions::builder().skills(Skills::All).build());
+        let idx = args
+            .iter()
+            .position(|a| a == "--allowedTools")
+            .expect("--allowedTools should be present");
+        assert!(args[idx + 1].split(',').any(|t| t == "Skill"));
+        // setting_sources defaults to user,project
+        let idx = args
+            .iter()
+            .position(|a| a == "--setting-sources")
+            .expect("--setting-sources should be present");
+        assert_eq!(args[idx + 1], "user,project");
+    }
+
+    #[test]
+    fn test_skills_list_injects_skill_rules() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .skills(Skills::List(vec![
+                    "pdf".to_string(),
+                    "my-plugin:doc".to_string(),
+                ]))
+                .allowed_tools(vec!["Read".to_string()])
+                .build(),
+        );
+        let idx = args
+            .iter()
+            .position(|a| a == "--allowedTools")
+            .expect("--allowedTools should be present");
+        let tools: Vec<&str> = args[idx + 1].split(',').collect();
+        assert!(tools.contains(&"Read"));
+        assert!(tools.contains(&"Skill(pdf)"));
+        assert!(tools.contains(&"Skill(my-plugin:doc)"));
+    }
+
+    #[test]
+    fn test_skills_invalid_name_rejected() {
+        let transport = transport_with(
+            ClaudeAgentOptions::builder()
+                .skills(Skills::List(vec!["*".to_string()]))
+                .build(),
+        );
+        assert!(transport.build_command().is_err());
+    }
+
+    #[test]
+    fn test_thinking_adaptive_maps_to_flag() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .thinking(ThinkingConfig::adaptive())
+                .build(),
+        );
+        let idx = args
+            .iter()
+            .position(|a| a == "--thinking")
+            .expect("--thinking should be present");
+        assert_eq!(args[idx + 1], "adaptive");
+    }
+
+    #[test]
+    fn test_thinking_enabled_maps_to_max_thinking_tokens() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .thinking(ThinkingConfig::with_budget(5000))
+                .build(),
+        );
+        let idx = args
+            .iter()
+            .position(|a| a == "--max-thinking-tokens")
+            .expect("--max-thinking-tokens should be present");
+        assert_eq!(args[idx + 1], "5000");
+    }
+
+    #[test]
+    fn test_thinking_disabled_maps_to_flag() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .thinking(ThinkingConfig::Disabled)
+                .build(),
+        );
+        let idx = args
+            .iter()
+            .position(|a| a == "--thinking")
+            .expect("--thinking should be present");
+        assert_eq!(args[idx + 1], "disabled");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_thinking_takes_precedence_over_deprecated_max_thinking_tokens() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .thinking(ThinkingConfig::Disabled)
+                .max_thinking_tokens(1000)
+                .build(),
+        );
+        // --thinking disabled wins; no --max-thinking-tokens emitted
+        assert!(args.iter().any(|a| a == "--thinking"));
+        assert!(!args.iter().any(|a| a == "--max-thinking-tokens"));
+    }
+
+    #[test]
+    fn test_effort_maps_to_flag() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .effort(EffortLevel::XHigh)
+                .build(),
+        );
+        let idx = args
+            .iter()
+            .position(|a| a == "--effort")
+            .expect("--effort should be present");
+        assert_eq!(args[idx + 1], "xhigh");
+    }
+
+    #[test]
+    fn test_session_id_maps_to_equals_form() {
+        let args = args_with(ClaudeAgentOptions::builder().session_id("abc-123").build());
+        assert!(args.iter().any(|a| a == "--session-id=abc-123"));
+    }
+
+    #[test]
+    fn test_resume_session_at_maps_to_equals_form() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .resume_session_at("uuid-1")
+                .build(),
+        );
+        assert!(args.iter().any(|a| a == "--resume-session-at=uuid-1"));
+    }
+
+    #[test]
+    fn test_resume_drops_turn_forwarded_even_when_empty() {
+        let args = args_with(ClaudeAgentOptions::builder().resume_drops_turn("").build());
+        assert!(args.iter().any(|a| a == "--resume-drops-turn="));
+    }
+
+    #[test]
+    fn test_strict_mcp_config_flag() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .strict_mcp_config(true)
+                .build(),
+        );
+        assert!(args.iter().any(|a| a == "--strict-mcp-config"));
+    }
+
+    #[test]
+    fn test_include_hook_events_flag() {
+        let args = args_with(
+            ClaudeAgentOptions::builder()
+                .include_hook_events(true)
+                .build(),
+        );
+        assert!(args.iter().any(|a| a == "--include-hook-events"));
+    }
+
+    #[test]
+    fn test_flags_absent_by_default() {
+        let args = args_with(ClaudeAgentOptions::default());
+        for flag in [
+            "--strict-mcp-config",
+            "--include-hook-events",
+            "--thinking",
+            "--effort",
+        ] {
+            assert!(!args.iter().any(|a| a == flag), "{flag} should be absent");
+        }
+        assert!(!args.iter().any(|a| a.starts_with("--session-id=")));
+    }
+
+    #[test]
+    fn test_system_prompt_preset_snapshot_serializes() {
+        let preset = SystemPromptPreset::new("claude_code").with_snapshot(true);
+        let json = serde_json::to_value(SystemPrompt::Preset(preset)).unwrap();
+        assert_eq!(json["snapshot"], serde_json::json!(true));
+        assert_eq!(json["type"], serde_json::json!("preset"));
     }
 }
